@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja" :class="{ 'dark': darkMode }" x-data="app()">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ExhibiReport{% endblock %}</title>
+    <!-- ダークモード即時適用（ページ遷移時の白フラッシュ防止） -->
+    <script>
+        (function() {
+            try {
+                var stored = localStorage.getItem('darkMode');
+                var isDark = stored === 'true'
+                    || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) document.documentElement.classList.add('dark');
+            } catch (e) {}
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { DEFAULT: '#6366F1', hover: '#4F46E5', light: '#EEF2FF' },
+                        secondary: '#8B5CF6',
+                        surface: { light: '#FFFFFF', dark: '#1A1D27' },
+                        bg: { light: '#FAFBFC', dark: '#0F1117' },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo-favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+    <!-- 背景イラスト（全ページ共通、固定。各コーナーに独立アンカー） -->
+    <div class="fixed inset-0 -z-10 pointer-events-none overflow-hidden" aria-hidden="true">
+        <!-- イラスト1: ネットワーク五角形（右上、ヘッダー直下） -->
+        <svg class="hidden sm:block absolute top-[100px] right-4 md:right-8 lg:right-12 w-[240px] h-[240px] lg:w-[300px] lg:h-[300px]"
+             viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- ライトモード -->
+            <g class="dark:hidden">
+                <!-- 五角形の外周 -->
+                <polygon points="150,70 226,125 197,215 103,215 74,125"
+                         stroke="#A78BFA" stroke-width="0.75" opacity="0.40" fill="none"/>
+                <!-- 内部のペンタグラム（5本の対角線） -->
+                <line x1="150" y1="70"  x2="197" y2="215" stroke="#C4B5FD" stroke-width="0.5" opacity="0.25"/>
+                <line x1="150" y1="70"  x2="103" y2="215" stroke="#C4B5FD" stroke-width="0.5" opacity="0.25"/>
+                <line x1="226" y1="125" x2="103" y2="215" stroke="#C4B5FD" stroke-width="0.5" opacity="0.25"/>
+                <line x1="226" y1="125" x2="74"  y2="125" stroke="#C4B5FD" stroke-width="0.5" opacity="0.25"/>
+                <line x1="197" y1="215" x2="74"  y2="125" stroke="#C4B5FD" stroke-width="0.5" opacity="0.25"/>
+                <!-- 5つの頂点ノード -->
+                <circle cx="150" cy="70"  r="4.5" stroke="#8B5CF6" stroke-width="1" opacity="0.55"/>
+                <circle cx="226" cy="125" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.55"/>
+                <circle cx="197" cy="215" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.55"/>
+                <circle cx="103" cy="215" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.55"/>
+                <circle cx="74"  cy="125" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.55"/>
+            </g>
+            <!-- ダークモード -->
+            <g class="hidden dark:block">
+                <polygon points="150,70 226,125 197,215 103,215 74,125"
+                         stroke="#7C3AED" stroke-width="0.75" opacity="0.30" fill="none"/>
+                <line x1="150" y1="70"  x2="197" y2="215" stroke="#6D28D9" stroke-width="0.5" opacity="0.20"/>
+                <line x1="150" y1="70"  x2="103" y2="215" stroke="#6D28D9" stroke-width="0.5" opacity="0.20"/>
+                <line x1="226" y1="125" x2="103" y2="215" stroke="#6D28D9" stroke-width="0.5" opacity="0.20"/>
+                <line x1="226" y1="125" x2="74"  y2="125" stroke="#6D28D9" stroke-width="0.5" opacity="0.20"/>
+                <line x1="197" y1="215" x2="74"  y2="125" stroke="#6D28D9" stroke-width="0.5" opacity="0.20"/>
+                <circle cx="150" cy="70"  r="4.5" stroke="#C4B5FD" stroke-width="1" opacity="0.50"/>
+                <circle cx="226" cy="125" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.45"/>
+                <circle cx="197" cy="215" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.45"/>
+                <circle cx="103" cy="215" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.45"/>
+                <circle cx="74"  cy="125" r="3.5" stroke="#A78BFA" stroke-width="1" opacity="0.45"/>
+            </g>
+        </svg>
+
+        <!-- イラスト2: ダイヤモンド（左上〜中央左） -->
+        <svg class="hidden sm:block absolute top-[140px] left-4 md:left-8 lg:left-12 w-[180px] h-[280px] lg:w-[220px] lg:h-[320px]"
+             viewBox="0 0 200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g class="dark:hidden">
+                <rect x="91"   y="71"    width="18" height="18" rx="1"   stroke="#C4B5FD" stroke-width="0.75" opacity="0.45" transform="rotate(50 100 80)"/>
+                <rect x="164"  y="154"   width="12" height="12" rx="1"   stroke="#A78BFA" stroke-width="0.75" opacity="0.30" transform="rotate(37 170 160)"/>
+                <rect x="75.5" y="235.5" width="9"  height="9"  rx="0.5" stroke="#8B5CF6" stroke-width="0.75" opacity="0.50" transform="rotate(57 80 240)"/>
+            </g>
+            <g class="hidden dark:block">
+                <rect x="91"   y="71"    width="18" height="18" rx="1"   stroke="#A78BFA" stroke-width="0.75" opacity="0.30" transform="rotate(50 100 80)"/>
+                <rect x="164"  y="154"   width="12" height="12" rx="1"   stroke="#8B5CF6" stroke-width="0.75" opacity="0.20" transform="rotate(37 170 160)"/>
+                <rect x="75.5" y="235.5" width="9"  height="9"  rx="0.5" stroke="#C4B5FD" stroke-width="0.75" opacity="0.35" transform="rotate(57 80 240)"/>
+            </g>
+        </svg>
+
+        <!-- イラスト3: 点線矢印（左下） -->
+        <svg class="hidden sm:block absolute bottom-[120px] left-[60px] md:left-[80px] lg:left-[120px] w-[160px] h-[25px] lg:w-[210px] lg:h-[33px]"
+             viewBox="0 0 200 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g class="dark:hidden">
+                <g transform="translate(10 15) rotate(-3)">
+                    <circle cx="0"  cy="0" r="3" fill="#DDD6FE" opacity="0.40"/>
+                    <circle cx="24" cy="0" r="3" fill="#C4B5FD" opacity="0.40"/>
+                    <circle cx="48" cy="0" r="3" fill="#A78BFA" opacity="0.40"/>
+                    <circle cx="72" cy="0" r="3" fill="#8B5CF6" opacity="0.40"/>
+                    <circle cx="96" cy="0" r="3" fill="#7C3AED" opacity="0.40"/>
+                    <line x1="108" y1="0" x2="160" y2="0" stroke="#7C3AED" stroke-width="2" opacity="0.40" stroke-linecap="round"/>
+                    <polygon points="160,0 148,-7 148,7" fill="#7C3AED" opacity="0.40"/>
+                </g>
+            </g>
+            <g class="hidden dark:block">
+                <g transform="translate(10 15) rotate(-3)">
+                    <circle cx="0"  cy="0" r="3" fill="#6D28D9" opacity="0.30"/>
+                    <circle cx="24" cy="0" r="3" fill="#7C3AED" opacity="0.30"/>
+                    <circle cx="48" cy="0" r="3" fill="#8B5CF6" opacity="0.30"/>
+                    <circle cx="72" cy="0" r="3" fill="#A78BFA" opacity="0.30"/>
+                    <circle cx="96" cy="0" r="3" fill="#C4B5FD" opacity="0.30"/>
+                    <line x1="108" y1="0" x2="160" y2="0" stroke="#C4B5FD" stroke-width="2" opacity="0.30" stroke-linecap="round"/>
+                    <polygon points="160,0 148,-7 148,7" fill="#C4B5FD" opacity="0.30"/>
+                </g>
+            </g>
+        </svg>
+    </div>
+    <!-- Header -->
+    <header class="fixed top-0 inset-x-0 z-50 backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200/50 dark:border-slate-700/50">
+        <nav class="max-w-[1440px] mx-auto h-14 flex items-center justify-between px-6">
+            <a href="/" class="flex items-center gap-2.5">
+                <img src="/static/img/logo.svg" class="w-7 h-7" alt="">
+                <span class="font-semibold text-slate-900 dark:text-white tracking-tight text-[15px]">
+                    Exhibi<span class="text-indigo-600 dark:text-indigo-400">Report</span>
+                </span>
+            </a>
+            <div class="flex items-center gap-1">
+                <a href="/pre-research"
+                   @click="localStorage.removeItem('exhibit:pre_research:v1')"
+                   class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-indigo-500/5 transition-colors">事前調査</a>
+                <a href="/post-report"
+                   @click="localStorage.removeItem('exhibit:post_report:v1')"
+                   class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-indigo-500/5 transition-colors">事後報告</a>
+                <a href="/history" class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-indigo-500/5 transition-colors">履歴</a>
+                <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+                <button @click="toggleDarkMode()" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <span x-show="!darkMode" class="text-sm">🌙</span>
+                    <span x-show="darkMode" class="text-sm">☀️</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-14 min-h-screen">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Help Button -->
+    <button @click="showHelp = true" class="fixed bottom-6 left-6 w-10 h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform z-40">
+        <span class="text-sm">❓</span>
+    </button>
+
+    <!-- Help Modal -->
+    <div x-show="showHelp" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showHelp = false" @keydown.escape.window="showHelp = false" style="display: none;">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto p-6 mx-4" @click.stop>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">使い方ガイド</h3>
+                <button @click="showHelp = false" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">✕</button>
+            </div>
+            <div class="flex gap-1 mb-4 border-b border-slate-200 dark:border-slate-700">
+                <button @click="helpTab = 'start'" :class="helpTab === 'start' ? 'border-primary text-primary' : 'border-transparent text-slate-500'" class="px-3 py-2 text-sm font-medium border-b-2 transition-colors">🚀 はじめに</button>
+                <button @click="helpTab = 'pre'" :class="helpTab === 'pre' ? 'border-primary text-primary' : 'border-transparent text-slate-500'" class="px-3 py-2 text-sm font-medium border-b-2 transition-colors">🔍 事前調査</button>
+                <button @click="helpTab = 'post'" :class="helpTab === 'post' ? 'border-primary text-primary' : 'border-transparent text-slate-500'" class="px-3 py-2 text-sm font-medium border-b-2 transition-colors">📝 事後報告</button>
+                <button @click="helpTab = 'history'" :class="helpTab === 'history' ? 'border-primary text-primary' : 'border-transparent text-slate-500'" class="px-3 py-2 text-sm font-medium border-b-2 transition-colors">📚 履歴</button>
+                <button @click="helpTab = 'faq'" :class="helpTab === 'faq' ? 'border-primary text-primary' : 'border-transparent text-slate-500'" class="px-3 py-2 text-sm font-medium border-b-2 transition-colors">❓ FAQ</button>
+            </div>
+
+            <!-- はじめに -->
+            <div x-show="helpTab === 'start'" class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                <p class="text-slate-800 dark:text-slate-200">ExhibiReport は展示会の<strong>事前調査</strong>と<strong>事後報告</strong>をAIで支援するツールです。</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                        <div class="text-2xl mb-1">🔍</div>
+                        <div class="font-medium text-slate-800 dark:text-slate-200">事前調査</div>
+                        <p class="text-xs mt-1">関心テーマからAIが出展企業を提案。訪問リストを作成。</p>
+                    </div>
+                    <div class="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                        <div class="text-2xl mb-1">📝</div>
+                        <div class="font-medium text-slate-800 dark:text-slate-200">事後報告</div>
+                        <p class="text-xs mt-1">訪問企業の詳細レポートと分析チャートを自動生成。</p>
+                    </div>
+                </div>
+                <div class="pt-2 space-y-2">
+                    <p class="text-xs">💾 <strong>自動保存</strong>: 入力内容と調査結果はブラウザに自動保存され、再起動しても復元されます（30日間保持）。</p>
+                    <p class="text-xs">📚 <strong>履歴</strong>: 完了したレポートは履歴に保存され、後から再表示・再開できます。</p>
+                </div>
+            </div>
+
+            <!-- 事前調査 -->
+            <div x-show="helpTab === 'pre'" class="space-y-3 text-sm text-slate-600 dark:text-slate-400" style="display: none;">
+                <div class="flex gap-3"><span class="text-xl">1️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">展示会情報</strong><br>URLを貼って「情報を取得」を押すと、AIが展示会名・会場・会期・出展者一覧URLを自動取得します。</div></div>
+                <div class="flex gap-3"><span class="text-xl">2️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">目的・テーマ</strong><br>調査目的と関心テーマを入力。Enterでテーマを追加できます。「この設定を保存」で次回も再利用可。</div></div>
+                <div class="flex gap-3"><span class="text-xl">3️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">おすすめ企業</strong><br>AIが各テーマごとに出展企業を並列検索。複数テーマに該当する企業ほど優先順位が上になります。</div></div>
+                <div class="flex gap-3"><span class="text-xl">4️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">訪問リスト</strong><br>選んだ企業にメモを付けて、テキストで出力 or クリップボードにコピー。履歴にも保存されます。</div></div>
+                <p class="pt-2 text-xs">💡 後で「履歴 → 事前調査を再開」から続きを編集できます。</p>
+            </div>
+
+            <!-- 事後報告 -->
+            <div x-show="helpTab === 'post'" class="space-y-3 text-sm text-slate-600 dark:text-slate-400" style="display: none;">
+                <div class="flex gap-3"><span class="text-xl">1️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">展示会・目的・企業入力</strong><br>展示会URL、目的・テーマ、訪問した企業を入力。事前調査データがあれば自動で引き継げます。</div></div>
+                <div class="flex gap-3"><span class="text-xl">2️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">AI並列調査</strong><br>全企業を並列でWeb検索。基本情報・主力製品・技術・展示内容・エビデンスを構造化して取得します。</div></div>
+                <div class="flex gap-3"><span class="text-xl">3️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">結果確認</strong><br>「企業別」タブで詳細を確認。失敗した企業は🔄ボタンで個別に再生成できます。</div></div>
+                <div class="flex gap-3"><span class="text-xl">4️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">分析タブ</strong><br>業界分布・技術キーワードのワードクラウド・関連ネットワーク等のチャートで全体傾向を可視化。</div></div>
+                <div class="flex gap-3"><span class="text-xl">5️⃣</span><div><strong class="text-slate-800 dark:text-slate-200">Markdown出力</strong><br>全社の詳細をMarkdownでダウンロード。社内共有やNotion貼付けに便利です。</div></div>
+            </div>
+
+            <!-- 履歴 -->
+            <div x-show="helpTab === 'history'" class="space-y-3 text-sm text-slate-600 dark:text-slate-400" style="display: none;">
+                <p>事前調査・事後報告どちらも、完了時に履歴へ自動保存されます。各カードのボタンから、保存時の状態を完全復元して続きから編集できます。</p>
+                <div class="space-y-2">
+                    <div class="flex gap-3"><span class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded text-xs h-fit shrink-0">🔍 事前調査を再開</span><span class="text-xs">事前調査モードで保存された状態（展示会情報・テーマ・おすすめ企業・訪問リスト）を復元します。</span></div>
+                    <div class="flex gap-3"><span class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs h-fit shrink-0">📝 事後報告を再開</span><span class="text-xs">事後報告モードで保存された状態（展示会情報・企業詳細・分析結果）を復元します。</span></div>
+                    <div class="flex gap-3"><span class="px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded text-xs h-fit shrink-0">🗑️</span><span class="text-xs">個別削除。ページ上部の「🗑️ すべて削除」で全件削除も可能です。</span></div>
+                </div>
+                <p class="pt-2 text-xs">💡 各画面の上部「🗑️ すべてリセット」は <strong>現在の編集中データ</strong>（ブラウザ保存）をクリアします。履歴（サーバー保存）は消えません。</p>
+                <p class="text-xs">💡 同じ <code class="text-[10px] bg-slate-100 dark:bg-slate-700 px-1 rounded">report_id</code> でレポートを再保存すると、履歴は上書きされます（重複しません）。</p>
+            </div>
+
+            <!-- FAQ -->
+            <div x-show="helpTab === 'faq'" class="space-y-2 text-sm text-slate-600 dark:text-slate-400" style="display: none;">
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">事前調査と事後報告の違いは？</summary><p class="mt-2 text-xs">事前調査は展示会<strong>前</strong>に関心テーマからおすすめ企業を提案するモード。事後報告は展示会<strong>後</strong>に訪問した企業の詳細レポートと分析チャートを作るモードです。</p></details>
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">入力したデータはどこに保存されますか？</summary><p class="mt-2 text-xs">編集中のデータはブラウザの localStorage に自動保存（30日間）。完了したレポートはサーバーのローカルディスク（<code class="text-[10px] bg-slate-100 dark:bg-slate-700 px-1 rounded">data/users/</code>）にJSONで保存されます。</p></details>
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">タイムアウトした企業はどうなりますか？</summary><p class="mt-2 text-xs">事後報告の結果画面で、該当企業の🔄ボタンから個別に再検索できます。</p></details>
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">提案企業が出てきません</summary><p class="mt-2 text-xs">展示会URL（特に出展者一覧URL）が正しいか、関心テーマが具体的すぎないかご確認ください。テーマを「RAG」「LLM」など短めの単語にすると検索精度が上がります。</p></details>
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">事前調査の結果を事後報告に引き継げますか？</summary><p class="mt-2 text-xs">はい。事後報告のステップ1で「📌 事前調査データが見つかりました」が表示されたら「引き継ぐ」を押すと企業リストと目的・テーマが自動入力されます。</p></details>
+                <details class="group p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg"><summary class="font-medium text-slate-800 dark:text-slate-200 cursor-pointer">ダークモードに切り替えるには？</summary><p class="mt-2 text-xs">右上のヘッダーにある 🌙 / ☀️ アイコンで切替。設定はブラウザに保存され、次回も維持されます。</p></details>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-20 right-6 z-50 space-y-2"></div>
+
+    <script src="/static/js/utils.js?v=2"></script>
+    <script src="/static/js/charts.js?v=2"></script>
+    <script src="/static/js/app.js?v=2"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

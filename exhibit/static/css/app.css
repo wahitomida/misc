@@ -1,0 +1,215 @@
+/* ExhibiReport Custom CSS */
+
+/* FOUC防止: ページ遷移時の白フラッシュを抑制
+   Tailwind の bg は body にしか付かないので、html 自体にも背景色を指定する */
+html { background-color: #FFFFFF; }
+html.dark { background-color: #0B0D14; }
+
+/* Alpine.js: 初期化前の要素を隠す（x-show のチラつき防止） */
+[x-cloak] { display: none !important; }
+
+/* details/summary: ブラウザ標準の三角マーカーを除去（カスタム矢印を使うため） */
+summary {
+    list-style: none;
+    cursor: pointer;
+}
+summary::-webkit-details-marker { display: none; }
+summary::marker { display: none; content: ''; }
+
+/* details[open] の summary 内にある .summary-chevron を回転 */
+details[open] > summary .summary-chevron {
+    transform: rotate(180deg);
+}
+
+/* Animations */
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+@keyframes pulse-once {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.animate-fade-in {
+    animation: fade-in 300ms ease-out forwards;
+}
+
+.animate-slide-up {
+    animation: slide-up 400ms ease-out forwards;
+}
+
+.animate-scale-in {
+    animation: scale-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-pulse-once {
+    animation: pulse-once 300ms ease-in-out;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+/* Selection */
+::selection {
+    background: rgba(99, 102, 241, 0.2);
+}
+
+/* Focus ring override */
+input:focus, textarea:focus, select:focus {
+    --tw-ring-color: rgba(99, 102, 241, 0.2);
+}
+
+/* Toast animation */
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100%); }
+}
+
+.toast-enter {
+    animation: toast-in 300ms ease-out forwards;
+}
+
+.toast-exit {
+    animation: toast-out 200ms ease-in forwards;
+}
+
+/* Stagger animations for card lists */
+.stagger-1 { animation-delay: 100ms; }
+.stagger-2 { animation-delay: 200ms; }
+.stagger-3 { animation-delay: 300ms; }
+.stagger-4 { animation-delay: 400ms; }
+.stagger-5 { animation-delay: 500ms; }
+
+/* Chart containers */
+canvas {
+    max-width: 100%;
+}
+
+/* Network graph */
+.node circle {
+    stroke: #fff;
+    stroke-width: 2px;
+}
+
+.link {
+    stroke-opacity: 0.6;
+}
+
+/* Word cloud */
+.word-cloud text {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.word-cloud text:hover {
+    opacity: 0.7;
+}
+
+/* スクロール可能であることを示す視覚的ヒント
+   - 下端のグラデーション影でコンテンツがまだ続くことを暗示
+   - 太めのカスタムスクロールバー */
+.scroll-shadow {
+    background:
+        linear-gradient(white 30%, rgba(255, 255, 255, 0)) center top,
+        linear-gradient(rgba(255, 255, 255, 0), white 70%) center bottom,
+        radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0)) center top,
+        radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0)) center bottom;
+    background-repeat: no-repeat;
+    background-size: 100% 24px, 100% 24px, 100% 8px, 100% 8px;
+    background-attachment: local, local, scroll, scroll;
+}
+.dark .scroll-shadow {
+    background:
+        linear-gradient(rgb(30, 41, 59) 30%, rgba(30, 41, 59, 0)) center top,
+        linear-gradient(rgba(30, 41, 59, 0), rgb(30, 41, 59) 70%) center bottom,
+        radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) center top,
+        radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) center bottom;
+    background-repeat: no-repeat;
+    background-size: 100% 24px, 100% 24px, 100% 8px, 100% 8px;
+    background-attachment: local, local, scroll, scroll;
+}
+.scroll-shadow::-webkit-scrollbar { width: 8px; }
+.scroll-shadow::-webkit-scrollbar-track { background: transparent; }
+.scroll-shadow::-webkit-scrollbar-thumb {
+    background: rgb(203, 213, 225);
+    border-radius: 4px;
+}
+.scroll-shadow::-webkit-scrollbar-thumb:hover {
+    background: rgb(148, 163, 184);
+}
+.dark .scroll-shadow::-webkit-scrollbar-thumb {
+    background: rgb(71, 85, 105);
+}
+.dark .scroll-shadow::-webkit-scrollbar-thumb:hover {
+    background: rgb(100, 116, 139);
+}
+
+
+/* Markdown rendered body (post_report) */
+.markdown-body { font-size: 0.875rem; line-height: 1.65; color: rgb(51, 65, 85); word-wrap: break-word; }
+.dark .markdown-body { color: rgb(203, 213, 225); }
+.markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1.2em 0 0.6em; padding-bottom: 0.3em; border-bottom: 1px solid rgb(226, 232, 240); }
+.markdown-body h2 { font-size: 1.25rem; font-weight: 700; margin: 1.2em 0 0.5em; padding-bottom: 0.25em; border-bottom: 1px solid rgb(226, 232, 240); }
+.markdown-body h3 { font-size: 1.1rem; font-weight: 600; margin: 1em 0 0.4em; color: rgb(99, 102, 241); }
+.markdown-body h4 { font-size: 1rem; font-weight: 600; margin: 0.9em 0 0.3em; }
+.dark .markdown-body h1, .dark .markdown-body h2 { border-color: rgb(51, 65, 85); }
+.markdown-body p { margin: 0.6em 0; }
+.markdown-body ul, .markdown-body ol { margin: 0.5em 0 0.5em 1.2em; padding-left: 1em; }
+.markdown-body ul { list-style: disc; }
+.markdown-body ol { list-style: decimal; }
+.markdown-body li { margin: 0.2em 0; }
+.markdown-body a { color: rgb(99, 102, 241); text-decoration: underline; }
+.markdown-body a:hover { color: rgb(79, 70, 229); }
+.markdown-body strong { font-weight: 700; color: rgb(30, 41, 59); }
+.dark .markdown-body strong { color: rgb(241, 245, 249); }
+.markdown-body em { font-style: italic; }
+.markdown-body code { background: rgb(241, 245, 249); padding: 0.1em 0.4em; border-radius: 0.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+.dark .markdown-body code { background: rgb(30, 41, 59); }
+.markdown-body pre { background: rgb(248, 250, 252); padding: 0.8em 1em; border-radius: 0.5rem; overflow-x: auto; margin: 0.8em 0; }
+.dark .markdown-body pre { background: rgb(15, 23, 42); }
+.markdown-body pre code { background: transparent; padding: 0; font-size: 0.8em; }
+.markdown-body blockquote { border-left: 4px solid rgb(99, 102, 241); padding: 0.5em 1em; margin: 0.8em 0; color: rgb(100, 116, 139); background: rgba(99, 102, 241, 0.05); border-radius: 0.25rem; }
+.markdown-body hr { border: none; border-top: 1px solid rgb(226, 232, 240); margin: 1.5em 0; }
+.dark .markdown-body hr { border-color: rgb(51, 65, 85); }
+.markdown-body table { width: 100%; margin: 0.8em 0; border-collapse: collapse; font-size: 0.85em; }
+.markdown-body th, .markdown-body td { padding: 0.5em 0.7em; border: 1px solid rgb(226, 232, 240); text-align: left; }
+.dark .markdown-body th, .dark .markdown-body td { border-color: rgb(51, 65, 85); }
+.markdown-body th { background: rgb(248, 250, 252); font-weight: 600; }
+.dark .markdown-body th { background: rgb(30, 41, 59); }
+
+/* Network graph container - responsive */
+.network-graph-container { width: 100%; min-height: 320px; }
+.network-graph-container svg { display: block; width: 100%; height: auto; }

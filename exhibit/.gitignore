@@ -1,0 +1,12 @@
+# Local caches and virtualenvs
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.log
+
+# Local runtime data and secrets
+.env
+.env.*
+data/users/
+data/exports/

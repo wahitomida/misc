@@ -1,0 +1,1761 @@
+{% extends "base.html" %}
+{% block title %}Roles — AI Orchestra{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+{% import "components/icon.html" as ui %}
+<div x-data="rolesPage()" x-init="init()" class="max-w-6xl mx-auto">
+
+  {# ヘッダー #}
+  <div class="mb-6">
+    <h1 class="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3
+               text-slate-800 dark:text-slate-200">
+      <svg class="w-7 h-7 md:w-8 md:h-8 text-sky-600 dark:text-sky-400 flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+      </svg>
+      <span>AIロール一覧</span>
+    </h1>
+    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+      AI Orchestra で利用できる専門家ロール。
+      各AIは独自の性格・専門性を持ち、議論に多角的な視点をもたらします。
+      カードをクリックすると詳細と統計を確認できます。
+    </p>
+  </div>
+
+  {# ============================================================
+     アクションバー (新規作成)
+     ============================================================ #}
+  <div class="flex justify-end mb-4" x-show="formMode === null">
+    <button @click="openCreateForm()"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl
+                   text-white text-sm font-medium bg-sky-600 hover:bg-sky-700
+                   shadow-sm shadow-sky-100 dark:shadow-sky-900/30 transition">
+      <span class="text-lg leading-none">+</span>
+      <span>新しいロールを作成</span>
+    </button>
+  </div>
+
+  {# ============================================================
+     ロール作成/編集フォームパネル
+     ============================================================ #}
+  <div x-show="formMode !== null"
+       x-cloak
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0 -translate-y-2"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 -translate-y-2"
+       class="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-8
+              border border-slate-200 dark:border-slate-700 shadow-sm">
+
+    {# フォームヘッダー #}
+    <div class="flex items-center justify-between mb-6
+                pb-4 border-b border-slate-200 dark:border-slate-700">
+      <h2 class="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-200
+                 flex items-center gap-2">
+        <span class="text-sky-500">{{ ui.icon('sparkles', 'w-5 h-5') }}</span>
+        <span x-text="formMode === 'create' ? '新しいロールを作成' : 'ロールを編集'"></span>
+        <span x-show="formMode === 'edit'"
+              class="text-sm font-mono text-slate-400"
+              x-text="'· ' + formData.role_id"></span>
+      </h2>
+      <button @click="closeForm()"
+              class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700
+                     transition text-slate-400 hover:text-slate-600"
+              aria-label="フォームを閉じる">
+        ✕
+      </button>
+    </div>
+
+    {# 2 カラム: フォーム / プレビュー #}
+    <div class="grid gap-6 lg:grid-cols-5">
+
+      {# --------- 左 (3/5): フォーム --------- #}
+      <div class="lg:col-span-3 space-y-4">
+
+        {# セクション 1: 基本情報 #}
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-700"
+                 open>
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-slate-50 dark:hover:bg-slate-800/50 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300
+                         inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('cog', 'w-4 h-4') }}</span> 基本情報
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">
+              {{ ui.icon('chevron-down', 'w-3 h-3') }}
+            </span>
+          </summary>
+          <div class="p-4 pt-0 space-y-4">
+            {# role_id #}
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">
+                role_id <span class="text-red-500">*</span>
+                <span class="text-slate-400" x-show="formMode === 'edit'">(編集不可)</span>
+              </label>
+              <input type="text"
+                     x-model="formData.role_id"
+                     :disabled="formMode === 'edit'"
+                     @input="validateForm()"
+                     placeholder="例: my_expert"
+                     pattern="^[a-z][a-z0-9_]*$"
+                     maxlength="30"
+                     class="w-full rounded-lg border text-sm px-3 py-2 font-mono
+                            bg-white dark:bg-slate-800
+                            text-slate-900 dark:text-slate-100
+                            disabled:bg-slate-100 disabled:text-slate-500
+                            dark:disabled:bg-slate-700 dark:disabled:text-slate-400
+                            focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                     :class="formErrors.role_id
+                       ? 'border-red-400 dark:border-red-500'
+                       : 'border-slate-300 dark:border-slate-600'">
+              <p x-show="formErrors.role_id"
+                 class="text-xs text-red-500 mt-1"
+                 x-text="formErrors.role_id"></p>
+            </div>
+
+            {# 絵文字 + 表示名 (2 カラム) #}
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-1">
+                <label class="block text-xs text-slate-500 mb-1">
+                  絵文字 <span class="text-red-500">*</span>
+                </label>
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl w-10 text-center flex-shrink-0"
+                        x-text="formData._emoji || '🎭'"></span>
+                  <select x-model="formData._emoji"
+                          @change="validateForm()"
+                          class="flex-1 min-w-0 rounded-lg border text-sm py-2 px-2
+                                 bg-white dark:bg-slate-800
+                                 text-slate-900 dark:text-slate-100
+                                 focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                          :class="formErrors._emoji
+                            ? 'border-red-400 dark:border-red-500'
+                            : 'border-slate-300 dark:border-slate-600'">
+                    <option value="">絵文字を選択</option>
+                    <template x-for="e in emojiOptions" :key="e">
+                      <option :value="e" x-text="e"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs text-slate-500 mb-1">
+                  表示名 <span class="text-red-500">*</span>
+                </label>
+                <input type="text"
+                       x-model="formData._name"
+                       @input="validateForm()"
+                       placeholder="例: データサイエンティスト"
+                       maxlength="60"
+                       class="w-full rounded-lg border text-sm px-3 py-2
+                              bg-white dark:bg-slate-800
+                              text-slate-900 dark:text-slate-100
+                              focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                       :class="formErrors._name
+                         ? 'border-red-400 dark:border-red-500'
+                         : 'border-slate-300 dark:border-slate-600'">
+                <p x-show="formErrors._name"
+                   class="text-xs text-red-500 mt-1"
+                   x-text="formErrors._name"></p>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        {# セクション 2: ロールのイメージ (メイン入力) #}
+        <details class="group rounded-xl border border-sky-200 dark:border-sky-800
+                        bg-sky-50/30 dark:bg-sky-900/10"
+                 open>
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-sky-50 dark:hover:bg-sky-900/20 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300
+                         inline-flex items-center gap-1.5">
+              <span class="text-sky-500">{{ ui.icon('sparkles', 'w-4 h-4') }}</span>
+              ロールのイメージ
+              <span class="text-xs text-slate-400">(AIが生成の素材にします)</span>
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">
+              {{ ui.icon('chevron-down', 'w-3 h-3') }}
+            </span>
+          </summary>
+          <div class="p-4 pt-0 space-y-4">
+            {# ロールのイメージ (統合 textarea) #}
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">
+                ロールのイメージ
+                <span class="text-slate-400">
+                  (このロールは何者か / どんな専門知識と視点を持つか / どんな話し方や性格か)
+                </span>
+              </label>
+              <textarea x-model="formData.description"
+                        @input="validateForm()"
+                        rows="7"
+                        maxlength="1500"
+                        placeholder="例:&#10;ユーザー体験の専門家。プロダクトの使いやすさを最優先で考える。&#10;UXデザイン・ユーザーリサーチ・人間中心設計に強い。&#10;共感的で柔らかい口調で、ユーザーの気持ちを代弁するように発言する。"
+                        class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                               bg-white dark:bg-slate-800 text-sm px-3 py-2
+                               focus:ring-2 focus:ring-sky-500 focus:border-transparent
+                               resize-y"></textarea>
+              <div class="flex items-center justify-between text-xs mt-1">
+                <p x-show="formErrors.description"
+                   class="text-red-500"
+                   x-text="formErrors.description"></p>
+                <span class="text-slate-400 ml-auto">
+                  <span x-text="(formData.description || '').length"></span> / 1,500
+                </span>
+              </div>
+            </div>
+
+            {# AI 生成ボタン #}
+            <div class="pt-2">
+              <button type="button" @click="generateRoleConfig()"
+                      :disabled="generating || !canGenerate"
+                      class="w-full px-4 py-2.5 rounded-xl text-sm font-medium
+                             text-white bg-sky-600 hover:bg-sky-700
+                             disabled:opacity-50 disabled:cursor-not-allowed
+                             transition inline-flex items-center justify-center gap-2">
+                <svg x-show="generating" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10"
+                          stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-show="!generating" class="inline-flex items-center gap-1.5">
+                  {{ ui.icon('sparkles', 'w-4 h-4') }}
+                  <span>AIで生成する</span>
+                </span>
+                <span x-show="generating">生成中... (5〜15秒)</span>
+              </button>
+              <p x-show="!canGenerate && !generating"
+                 class="text-xs text-slate-400 mt-2 text-center">
+                ロールのイメージを入力してください
+              </p>
+            </div>
+          </div>
+        </details>
+
+        {# セクション 3: 生成された設定 (AI 生成後にアコーディオン展開) #}
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-700"
+                 :open="generatedExpanded || formMode === 'edit'">
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-slate-50 dark:hover:bg-slate-800/50 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300
+                         inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('cog', 'w-4 h-4') }}</span>
+              生成された設定
+              <span class="text-xs text-slate-400">(必要に応じて微調整)</span>
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">
+              {{ ui.icon('chevron-down', 'w-3 h-3') }}
+            </span>
+          </summary>
+          <div class="p-4 pt-0 space-y-5">
+
+            {# 生成エラー表示 #}
+            <div x-show="generateError"
+                 x-cloak
+                 class="p-3 rounded-lg border border-red-200 dark:border-red-800
+                        bg-red-50 dark:bg-red-900/20 text-xs text-red-700 dark:text-red-300">
+              <p class="font-medium mb-1">生成に失敗しました</p>
+              <p x-text="generateError || '手動で入力するか、再度お試しください'"></p>
+            </div>
+
+            {# system_prompt #}
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">
+                システムプロンプト <span class="text-red-500">*</span>
+              </label>
+              <p class="text-xs text-slate-400 mb-2">
+                共通ルール (発言長・ラリー等) は自動で付与されるので、
+                ここではキャラクター・視点・議論での役割だけを書きます。
+              </p>
+              <textarea x-model="formData.system_prompt"
+                        @input="validateForm()"
+                        rows="8"
+                        maxlength="5000"
+                        placeholder="AIで生成するか手動で入力してください"
+                        class="w-full rounded-lg border font-mono text-xs px-3 py-2
+                               bg-white dark:bg-slate-800
+                               text-slate-900 dark:text-slate-100
+                               focus:ring-2 focus:ring-sky-500 focus:border-transparent
+                               resize-y"
+                        :class="formErrors.system_prompt
+                          ? 'border-red-400 dark:border-red-500'
+                          : 'border-slate-300 dark:border-slate-600'"></textarea>
+              <div class="flex items-center justify-between text-xs mt-1">
+                <p x-show="formErrors.system_prompt"
+                   class="text-red-500"
+                   x-text="formErrors.system_prompt"></p>
+                <span class="text-slate-400 ml-auto">
+                  <span x-text="(formData.system_prompt || '').length"></span> / 5,000
+                </span>
+              </div>
+            </div>
+
+            {# domain_tags #}
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs text-slate-500">ドメインタグ</label>
+                <button type="button" @click="addListItem('domain_tags')"
+                        class="text-xs px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600
+                               hover:bg-slate-100 dark:hover:bg-slate-700 transition inline-flex items-center gap-1">
+                  <span class="text-sm leading-none">+</span> 追加
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1.5 mb-2" x-show="formData.domain_tags.length">
+                <template x-for="(_, idx) in formData.domain_tags" :key="idx">
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full
+                               bg-teal-50 dark:bg-teal-900/30
+                               text-teal-700 dark:text-teal-300
+                               border border-teal-200 dark:border-teal-700 text-xs font-mono
+                               animate-fade-in">
+                    <input type="text"
+                           x-model="formData.domain_tags[idx]"
+                           @input="validateForm()"
+                           class="bg-transparent border-0 p-0 focus:ring-0 focus:outline-none
+                                  text-xs font-mono w-24 min-w-0"
+                           placeholder="tag">
+                    <button type="button"
+                            @click="removeListItem('domain_tags', idx)"
+                            class="text-teal-500 hover:text-red-500 transition"
+                            aria-label="削除">✕</button>
+                  </span>
+                </template>
+              </div>
+              <p x-show="!formData.domain_tags.length"
+                 class="text-xs text-slate-400 italic">タグはまだありません</p>
+              {# 提案タグ #}
+              <div class="mt-2">
+                <p class="text-xs text-slate-400 mb-1.5">提案タグ:</p>
+                <div class="flex flex-wrap gap-1">
+                  <template x-for="tag in suggestedTags" :key="tag">
+                    <button type="button"
+                            @click="addDomainTag(tag)"
+                            class="text-xs px-2 py-0.5 rounded-full font-mono
+                                   border border-slate-300 dark:border-slate-600
+                                   bg-slate-50 dark:bg-slate-700
+                                   hover:bg-sky-50 hover:border-sky-300
+                                   dark:hover:bg-sky-900/30 dark:hover:border-sky-600
+                                   transition"
+                            x-text="tag"></button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            {# evaluation_criteria #}
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs text-slate-500">評価基準 (任意, 最大5件)</label>
+                <button type="button"
+                        @click="addCriteria()"
+                        :disabled="formData.evaluation_criteria.length >= 5"
+                        class="text-xs px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600
+                               hover:bg-slate-100 dark:hover:bg-slate-700 transition
+                               disabled:opacity-40 disabled:cursor-not-allowed
+                               inline-flex items-center gap-1">
+                  <span class="text-sm leading-none">+</span> 追加
+                </button>
+              </div>
+              <div class="space-y-2">
+                <template x-for="(_, idx) in formData.evaluation_criteria" :key="idx">
+                  <div class="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700
+                              bg-slate-50 dark:bg-slate-700/30 space-y-2 animate-fade-in">
+                    <div class="flex items-center gap-2">
+                      <input type="text"
+                             x-model="formData.evaluation_criteria[idx].name"
+                             @input="validateForm()"
+                             :placeholder="'基準 #' + (idx + 1) + ' 名'"
+                             class="flex-1 rounded border border-slate-300 dark:border-slate-600
+                                    bg-white dark:bg-slate-800 text-sm px-2 py-1.5
+                                    focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+                      <button type="button"
+                              @click="removeCriteria(idx)"
+                              class="p-1.5 rounded text-slate-400 hover:text-red-500
+                                     hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                              aria-label="削除">
+                        ✕
+                      </button>
+                    </div>
+                    <input type="text"
+                           x-model="formData.evaluation_criteria[idx].description"
+                           @input="validateForm()"
+                           placeholder="説明"
+                           class="w-full rounded border border-slate-300 dark:border-slate-600
+                                  bg-white dark:bg-slate-800 text-sm px-2 py-1.5
+                                  focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+                  </div>
+                </template>
+                <p x-show="!formData.evaluation_criteria.length"
+                   class="text-xs text-slate-400 italic">評価基準はまだありません</p>
+              </div>
+              <p x-show="formErrors.evaluation_criteria"
+                 class="text-xs text-red-500 mt-1"
+                 x-text="formErrors.evaluation_criteria"></p>
+            </div>
+
+            {# モデル + デフォルトレベル (2 カラム) #}
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">モデル</label>
+                <select x-model="formData.model"
+                        class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                               bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                  <template x-for="m in availableModels" :key="m">
+                    <option :value="m" x-text="m"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">デフォルトレベル</label>
+                <div class="grid grid-cols-3 gap-1">
+                  <template x-for="lv in ['low', 'medium', 'high']" :key="lv">
+                    <label class="relative cursor-pointer">
+                      <input type="radio" name="default_level"
+                             :value="lv"
+                             x-model="formData.default_level"
+                             class="peer sr-only">
+                      <div class="p-1.5 rounded-lg border text-center text-xs transition
+                                  peer-checked:border-sky-500 peer-checked:bg-sky-50
+                                  dark:peer-checked:bg-sky-900/30
+                                  border-slate-200 dark:border-slate-700"
+                           x-text="lv"></div>
+                    </label>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </details>
+
+      </div>
+
+      {# --------- 右 (2/5, sticky): プレビュー --------- #}
+      <div class="lg:col-span-2">
+        <div class="lg:sticky lg:top-24 space-y-4">
+          <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700
+                      bg-gradient-to-br from-slate-50 to-white
+                      dark:from-slate-900 dark:to-slate-800 shadow-sm">
+            <div class="text-xs text-slate-400 mb-3 inline-flex items-center gap-1">
+              <span class="text-sky-500">{{ ui.icon('eye', 'w-3 h-3') }}</span> プレビュー
+            </div>
+
+            {# カード風プレビュー #}
+            <div class="text-center mb-4">
+              <div class="text-5xl mb-2" x-text="formData._emoji || '🎭'"></div>
+              <div class="text-lg font-bold text-slate-800 dark:text-slate-200"
+                   x-text="formData._name || '(表示名)'"></div>
+              <div class="text-xs text-slate-400 font-mono mt-0.5"
+                   x-text="formData.role_id || '(role_id)'"></div>
+              <div class="mt-2">
+                <span class="text-xs px-2 py-0.5 rounded-full font-mono
+                             bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+                      x-text="formData.model || '(model)'"></span>
+              </div>
+            </div>
+
+            {# 概要 (description) #}
+            <div class="mb-4" x-show="formPreview.description">
+              <h5 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                概要
+              </h5>
+              <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line"
+                 x-text="formPreview.description"></p>
+            </div>
+
+            {# ドメインタグ #}
+            <div class="mb-4" x-show="formPreview.domain_tags.length">
+              <h5 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                ドメインタグ
+              </h5>
+              <div class="flex flex-wrap gap-1">
+                <template x-for="t in formPreview.domain_tags" :key="t">
+                  <span class="text-xs px-2 py-0.5 rounded-full font-mono
+                               bg-teal-50 text-teal-700
+                               dark:bg-teal-900/30 dark:text-teal-300"
+                        x-text="t"></span>
+                </template>
+              </div>
+            </div>
+
+            {# 空の場合の案内 #}
+            <div x-show="!formPreview.description && !formPreview.domain_tags.length"
+                 class="p-3 rounded-lg bg-slate-50 dark:bg-slate-700/30
+                        border border-dashed border-slate-300 dark:border-slate-600
+                        text-center">
+              <p class="text-xs text-slate-400">
+                イメージを入力するとここにプレビューが表示されます
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# アクションバー #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6
+                pt-4 border-t border-slate-200 dark:border-slate-700">
+      <p class="text-xs text-slate-400" x-show="!isFormValid">
+        必須項目を全て入力してください
+      </p>
+      <div class="flex gap-2 sm:ml-auto">
+        <button type="button" @click="closeForm()"
+                :disabled="saving"
+                class="px-4 py-2 rounded-xl text-sm
+                       text-slate-700 dark:text-slate-300
+                       bg-slate-100 dark:bg-slate-700
+                       hover:bg-slate-200 dark:hover:bg-slate-600
+                       disabled:opacity-50 disabled:cursor-not-allowed transition">
+          キャンセル
+        </button>
+        <button type="button" @click="saveRole()"
+                :disabled="!isFormValid || saving"
+                class="px-6 py-2 rounded-xl text-white text-sm font-medium
+                       bg-sky-600 hover:bg-sky-700
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       transition inline-flex items-center gap-2">
+          <svg x-show="saving" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10"
+                    stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span x-text="saving ? '保存中...' : (formMode === 'create' ? '作成する' : '更新する')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     ローディング (skeleton × 8)
+     ============================================================ #}
+  <template x-if="loading">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <template x-for="i in 8" :key="i">
+        <div class="skeleton h-40 rounded-2xl"></div>
+      </template>
+    </div>
+  </template>
+
+  {# ============================================================
+     ロールカードグリッド
+     ============================================================ #}
+  <template x-if="!loading">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <template x-for="role in roles" :key="role.id">
+        <button @click="selectRole(role.id)"
+                :aria-selected="selectedRoleId === role.id"
+                :aria-expanded="selectedRoleId === role.id"
+                aria-controls="role-detail-panel"
+                class="p-5 rounded-2xl border text-center transition-all duration-200
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                       card-glow"
+                :class="selectedRoleId === role.id
+                  ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 shadow-lg shadow-sky-100 dark:shadow-sky-900/30'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'">
+
+          {# 絵文字 #}
+          <div class="text-4xl mb-2" x-text="role.emoji || '🎭'"></div>
+
+          {# 名前 #}
+          <div class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1"
+               x-text="role.name"></div>
+
+          {# ID + デフォルトバッジ #}
+          <div class="flex items-center justify-center gap-1.5 mb-3">
+            <div class="text-xs text-slate-400 font-mono"
+                 x-text="role.id"></div>
+            <span x-show="role.is_default"
+                  class="text-[10px] px-1.5 py-0 rounded-full
+                         bg-slate-100 text-slate-500
+                         dark:bg-slate-700 dark:text-slate-400"
+                  title="デフォルトロール">🔒</span>
+          </div>
+
+          {# 統計 (session_count > 0) #}
+          <template x-if="role.stats && role.stats.session_count > 0">
+            <div class="flex items-center justify-center gap-2">
+              <div class="flex items-center gap-0.5">
+                <span class="text-xs text-amber-500">★</span>
+                <span class="text-xs font-mono font-medium text-slate-600 dark:text-slate-400"
+                      x-text="(role.stats.avg_score ?? 0).toFixed(1)"></span>
+              </div>
+              <div class="text-xs text-slate-400">
+                <span x-text="role.stats.session_count"></span>回
+              </div>
+            </div>
+          </template>
+
+          {# 未参加 #}
+          <template x-if="!role.stats || !role.stats.session_count">
+            <div class="text-xs text-slate-400 italic">未参加</div>
+          </template>
+        </button>
+      </template>
+    </div>
+  </template>
+
+  {# ============================================================
+     詳細パネル
+     ============================================================ #}
+  <div id="role-detail-panel"
+       x-show="selectedRoleId && selectedRole"
+       x-cloak
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 translate-y-4"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 translate-y-4"
+       class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm mb-8">
+
+    {# ヘッダー + アクション #}
+    <div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="text-3xl flex-shrink-0" x-text="selectedRole?.emoji || '🎭'"></span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 class="text-xl font-bold text-slate-900 dark:text-white truncate"
+                x-text="selectedRole?.name"></h2>
+            <span x-show="selectedRole?.is_default"
+                  class="text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1
+                         bg-slate-100 text-slate-600
+                         dark:bg-slate-700 dark:text-slate-300">
+              🔒 デフォルト
+            </span>
+          </div>
+          <span class="text-sm text-slate-500 font-mono"
+                x-text="selectedRole?.id"></span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 ml-auto">
+        <button @click="openEditForm(selectedRole.id)"
+                x-show="selectedRole"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium
+                       text-sky-700 dark:text-sky-300
+                       bg-sky-50 dark:bg-sky-900/30
+                       hover:bg-sky-100 dark:hover:bg-sky-900/50
+                       transition inline-flex items-center gap-1.5">
+          {{ ui.icon('pencil-square', 'w-3.5 h-3.5') }} 編集
+        </button>
+        <button @click="deleteRole(selectedRole.id)"
+                x-show="selectedRole && !selectedRole.is_default"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium
+                       text-red-700 dark:text-red-300
+                       bg-red-50 dark:bg-red-900/30
+                       hover:bg-red-100 dark:hover:bg-red-900/50
+                       transition inline-flex items-center gap-1.5">
+          {{ ui.icon('trash', 'w-3.5 h-3.5') }} 削除
+        </button>
+        <button @click="closeDetail()"
+                class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700
+                       transition text-slate-400 hover:text-slate-600 flex-shrink-0"
+                aria-label="詳細を閉じる">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    {# 2 カラム #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      {# 左: 基本情報 #}
+      <div class="space-y-4">
+        <div>
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            専門分野
+          </h4>
+          <p class="text-sm text-slate-700 dark:text-slate-300"
+             x-text="selectedRole?.specialty || '-'"></p>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            性格
+          </h4>
+          <p class="text-sm text-slate-700 dark:text-slate-300"
+             x-text="selectedRole?.personality || '-'"></p>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            弱み (自覚すべき点)
+          </h4>
+          <p class="text-sm text-orange-600 dark:text-orange-400"
+             x-text="selectedRole?.weaknesses || '-'"></p>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            発言ルール
+          </h4>
+          <ul class="space-y-1" x-show="selectedRole?.speaking_rules?.length">
+            <template x-for="(rule, idx) in selectedRole?.speaking_rules || []" :key="idx">
+              <li class="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
+                <span class="text-sky-500 flex-shrink-0 mt-0.5">•</span>
+                <span x-text="rule"></span>
+              </li>
+            </template>
+          </ul>
+          <p class="text-sm text-slate-400 italic" x-show="!selectedRole?.speaking_rules?.length">
+            発言ルールは登録されていません
+          </p>
+        </div>
+      </div>
+
+      {# 右: 統計 + チャート #}
+      <div class="space-y-4">
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3
+                     inline-flex items-center gap-1.5">
+            <span class="text-sky-500">{{ ui.icon('chart-bar', 'w-3.5 h-3.5') }}</span> パフォーマンス
+          </h4>
+
+          {# 統計あり #}
+          <template x-if="selectedRole?.stats?.session_count > 0">
+            <div class="space-y-3">
+              {# 自己評価 #}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-600 dark:text-slate-400">自己評価</span>
+                <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-0.5">
+                    <template x-for="i in 5" :key="i">
+                      <span class="text-sm"
+                            :class="i <= Math.round(selectedRole.stats.self_avg)
+                              ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'">★</span>
+                    </template>
+                  </div>
+                  <span class="text-sm font-mono font-medium"
+                        x-text="(selectedRole.stats.self_avg ?? 0).toFixed(1)"></span>
+                </div>
+              </div>
+
+              {# 他者評価 #}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-600 dark:text-slate-400">他者評価</span>
+                <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-0.5">
+                    <template x-for="i in 5" :key="i">
+                      <span class="text-sm"
+                            :class="i <= Math.round(selectedRole.stats.peer_avg)
+                              ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'">★</span>
+                    </template>
+                  </div>
+                  <span class="text-sm font-mono font-medium"
+                        x-text="(selectedRole.stats.peer_avg ?? 0).toFixed(1)"></span>
+                </div>
+              </div>
+
+              {# MVP #}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-600 dark:text-slate-400">MVP回数</span>
+                <span class="text-sm font-medium">
+                  <span class="font-mono" x-text="selectedRole.stats.mvp_count ?? 0"></span>
+                  <span class="text-slate-400"> / </span>
+                  <span class="font-mono" x-text="selectedRole.stats.session_count"></span>
+                  <span class="text-xs text-slate-500 ml-1">セッション</span>
+                </span>
+              </div>
+
+              {# トレンド #}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-600 dark:text-slate-400">トレンド</span>
+                <span class="text-xs font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                      :class="{
+                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300':
+                          selectedRole.stats.trend === 'improving',
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300':
+                          selectedRole.stats.trend === 'declining',
+                        'bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-300':
+                          selectedRole.stats.trend === 'stable' || !selectedRole.stats.trend,
+                      }">
+                  <template x-if="selectedRole.stats.trend === 'improving'">
+                    {{ ui.icon('arrow-trending-up', 'w-3 h-3') }}
+                  </template>
+                  <template x-if="selectedRole.stats.trend === 'declining'">
+                    {{ ui.icon('arrow-trending-down', 'w-3 h-3') }}
+                  </template>
+                  <template x-if="selectedRole.stats.trend !== 'improving' && selectedRole.stats.trend !== 'declining'">
+                    {{ ui.icon('arrow-right', 'w-3 h-3') }}
+                  </template>
+                  <span x-text="trendLabel(selectedRole.stats.trend)"></span>
+                </span>
+              </div>
+
+              {# 参加回数 #}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-600 dark:text-slate-400">参加回数</span>
+                <span class="text-sm font-medium">
+                  <span class="font-mono" x-text="selectedRole.stats.session_count"></span>回
+                </span>
+              </div>
+            </div>
+          </template>
+
+          {# 統計なし #}
+          <template x-if="!selectedRole?.stats || !selectedRole?.stats?.session_count">
+            <div class="text-center py-4">
+              <div class="flex justify-center mb-2 text-slate-400">
+                {{ ui.icon('inbox', 'w-6 h-6') }}
+              </div>
+              <p class="text-sm text-slate-500">まだ参加履歴がありません</p>
+            </div>
+          </template>
+        </div>
+
+        {# スコア推移チャート (履歴 2 件以上) #}
+        <div x-show="selectedRole?.stats?.history?.length > 1">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2
+                     inline-flex items-center gap-1.5">
+            <span class="text-sky-500">{{ ui.icon('arrow-trending-up', 'w-3.5 h-3.5') }}</span> スコア推移
+          </h4>
+          <div class="h-40">
+            <canvas x-ref="scoreChart" aria-label="スコア推移チャート"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# フィードバック履歴 #}
+    <div class="mt-6" x-show="selectedRole?.stats?.recent_feedback?.length > 0">
+      <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3
+                 inline-flex items-center gap-1.5">
+        <span class="text-sky-500">{{ ui.icon('chat-bubble', 'w-3.5 h-3.5') }}</span> 最近のフィードバック
+      </h4>
+      <div class="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+        <template x-for="(fb, idx) in selectedRole?.stats?.recent_feedback || []" :key="idx">
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50
+                      border border-slate-100 dark:border-slate-600">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="text-xs text-slate-400 font-mono"
+                    x-text="formatFbDate(fb.date)"></span>
+              <span class="text-xs text-slate-500 truncate"
+                    x-text="fb.topic ? '— ' + fb.topic : ''"></span>
+            </div>
+            <div class="flex items-center gap-3 mb-1 text-xs">
+              <span class="text-slate-500">
+                自己: <span class="font-mono" x-text="(fb.self_eval_avg ?? 0).toFixed(1)"></span>
+              </span>
+              <span class="text-slate-500">
+                他者: <span class="font-mono" x-text="(fb.peer_eval_avg ?? 0).toFixed(1)"></span>
+              </span>
+            </div>
+            <p x-show="fb.orchestrator_feedback"
+               class="text-sm text-slate-700 dark:text-slate-300 italic"
+               x-text="'&quot;' + (fb.orchestrator_feedback || '') + '&quot;'"></p>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     全体統計 (hasAnyStats)
+     ============================================================ #}
+  <div x-show="!loading && hasAnyStats"
+       x-cloak
+       class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm">
+
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+      <span class="inline-flex items-center gap-2"><span class="text-sky-500">{{ ui.icon('chart-bar', 'w-5 h-5') }}</span> ロール間比較</span>
+    </h3>
+
+    {# 比較テーブル #}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500 dark:text-slate-400
+                     border-b border-slate-200 dark:border-slate-700">
+            <th class="pb-3 pl-2">ロール</th>
+            <th class="pb-3 text-center">参加</th>
+            <th class="pb-3 text-center">自己評価</th>
+            <th class="pb-3 text-center">他者評価</th>
+            <th class="pb-3 text-center">MVP率</th>
+            <th class="pb-3 text-center">トレンド</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="role in rolesWithStats" :key="role.id">
+            <tr class="border-b border-slate-100 dark:border-slate-800
+                       hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer"
+                @click="selectRole(role.id)">
+              <td class="py-3 pl-2">
+                <div class="flex items-center gap-2">
+                  <span x-text="role.emoji || '🎭'"></span>
+                  <span class="font-medium text-slate-700 dark:text-slate-300"
+                        x-text="role.name"></span>
+                  <span x-show="!role.is_default"
+                        class="text-[10px] px-1.5 py-0 rounded-full
+                               bg-teal-100 text-teal-700
+                               dark:bg-teal-900/30 dark:text-teal-300"
+                        title="カスタムロール">Custom</span>
+                </div>
+              </td>
+              <td class="py-3 text-center">
+                <span class="font-mono" x-text="role.stats.session_count"></span>
+              </td>
+              <td class="py-3 text-center">
+                <div class="flex items-center justify-center gap-2">
+                  <span class="font-mono"
+                        x-text="(role.stats.self_avg ?? 0).toFixed(1)"></span>
+                  <div class="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-400 rounded-full"
+                         :style="'width: ' + ((role.stats.self_avg ?? 0) / 5 * 100) + '%'"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 text-center">
+                <div class="flex items-center justify-center gap-2">
+                  <span class="font-mono"
+                        x-text="(role.stats.peer_avg ?? 0).toFixed(1)"></span>
+                  <div class="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-sky-400 rounded-full"
+                         :style="'width: ' + ((role.stats.peer_avg ?? 0) / 5 * 100) + '%'"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 text-center">
+                <span class="font-mono" x-text="mvpRatePct(role) + '%'"></span>
+              </td>
+              <td class="py-3 text-center">
+                <span class="inline-flex justify-center" :aria-label="trendLabel(role.stats.trend)">
+                  <template x-if="role.stats.trend === 'improving'">
+                    <span class="text-green-500">{{ ui.icon('arrow-trending-up', 'w-4 h-4') }}</span>
+                  </template>
+                  <template x-if="role.stats.trend === 'declining'">
+                    <span class="text-red-500">{{ ui.icon('arrow-trending-down', 'w-4 h-4') }}</span>
+                  </template>
+                  <template x-if="role.stats.trend !== 'improving' && role.stats.trend !== 'declining'">
+                    <span class="text-slate-400">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+                  </template>
+                </span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    {# ランキング #}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+      <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10
+                  border border-amber-200 dark:border-amber-800 text-center">
+        <div class="text-xs text-amber-600 dark:text-amber-400 mb-1 inline-flex items-center gap-1">
+          {{ ui.icon('trophy', 'w-3.5 h-3.5') }} 最高評価
+        </div>
+        <div class="text-xl" x-text="topRated?.emoji || '-'"></div>
+        <div class="text-sm font-medium" x-text="topRated?.name || '-'"></div>
+        <div class="text-xs text-slate-500"
+             x-text="topRated ? '★' + (topRated.stats.peer_avg ?? 0).toFixed(1) : ''"></div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-sky-50 dark:bg-sky-900/10
+                  border border-sky-200 dark:border-sky-800 text-center">
+        <div class="text-xs text-sky-600 dark:text-sky-400 mb-1 inline-flex items-center gap-1">
+          {{ ui.icon('star', 'w-3.5 h-3.5') }} 最多MVP
+        </div>
+        <div class="text-xl" x-text="topMVP?.emoji || '-'"></div>
+        <div class="text-sm font-medium" x-text="topMVP?.name || '-'"></div>
+        <div class="text-xs text-slate-500"
+             x-text="topMVP ? (topMVP.stats.mvp_count ?? 0) + '回' : ''"></div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-green-50 dark:bg-green-900/10
+                  border border-green-200 dark:border-green-800 text-center">
+        <div class="text-xs text-teal-600 dark:text-green-400 mb-1 inline-flex items-center gap-1">
+          {{ ui.icon('flag', 'w-3.5 h-3.5') }} 最多参加
+        </div>
+        <div class="text-xl" x-text="mostActive?.emoji || '-'"></div>
+        <div class="text-sm font-medium" x-text="mostActive?.name || '-'"></div>
+        <div class="text-xs text-slate-500"
+             x-text="mostActive ? (mostActive.stats.session_count ?? 0) + '回' : ''"></div>
+      </div>
+    </div>
+  </div>
+
+  {# 統計なし (かつ ロード完了) #}
+  <div x-show="!loading && !hasAnyStats"
+       x-cloak
+       class="bg-white dark:bg-slate-800 rounded-2xl p-8
+              border border-slate-200 dark:border-slate-700 shadow-sm text-center">
+    <div class="flex justify-center mb-3 text-slate-400">
+      {{ ui.icon('chart-bar', 'w-10 h-10') }}
+    </div>
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+      まだフィードバック履歴がありません。<br>
+      議論やレビューを実施するとロール別の統計がここに表示されます。
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+  /**
+   * ロール管理ページの Alpine.js コンポーネント。
+   *
+   * 依存:
+   *   - Chart.js 4.x (head_extra で読み込み済)
+   *   - /api/roles, /api/roles/{id}, /api/roles/{id}/stats
+   */
+  function rolesPage() {
+    return {
+      // === State ===
+      roles: [],
+      selectedRoleId: null,
+      selectedRole: null,
+      loading: true,
+      chartInstance: null,
+
+      // === Form state (CRUD) ===
+      formMode: null,           // null | 'create' | 'edit'
+      formData: {
+        role_id: '',
+        _emoji: '',
+        _name: '',
+        model: 'gpt-4.1',
+        default_level: 'medium',
+        description: '',
+        system_prompt: '',
+        domain_tags: [],
+        evaluation_criteria: [],
+        expertise: [],
+        personality: { traits: [], communication_style: '', weakness: '' },
+      },
+      formErrors: {},
+      availableModels: [],
+      saving: false,
+      generating: false,
+      generateError: '',
+      generatedExpanded: false,
+      suggestedTags: [
+        'machine_learning', 'software_engineering', 'business',
+        'design', 'science', 'mathematics', 'optimization',
+        'signal_processing', 'general', 'any',
+      ],
+      // 絵文字プルダウンの候補一覧 (ロールによく使うものを厳選)。
+      emojiOptions: [
+        '🎭', '🧑‍💻', '🧑‍🎨', '🧑‍🔬', '🧑‍🎓', '🧑‍⚖️',
+        '🧑‍🏫', '🧑‍💼', '🧑‍🔧', '🧑‍🚀', '🧑‍🍳', '🧑‍🚒',
+        '🤖', '👽', '🧠', '👁️', '👂', '👌',
+        '🦊', '🐺', '🦁', '🐯', '🐼', '🐨',
+        '🦉', '🦅', '🦄', '🐉', '🐍', '🐬',
+        '🌟', '⭐', '🌙', '☀️', '🔥', '⚡',
+        '💧', '🌸', '🌺', '🌈', '🌲', '🌴',
+        '🎯', '🎨', '📚', '🔍', '🔬', '🧮',
+        '⚙️', '🛠️', '💡', '🚀', '🔨', '🔑',
+        '🎪', '🎬', '🎼', '🎵', '🎲', '🏆',
+        '💎', '⚖️', '🕰️', '📊', '📈', '📉',
+        '📝', '✏️', '🏹', '🕶️', '🔮', '🧲',
+        '🌐', '💻', '📦', '🎪', '🎭', '🕵️',
+      ],
+
+      // フォームの初期値を返すヘルパー。
+      _emptyFormData() {
+        return {
+          role_id: '',
+          _emoji: '',
+          _name: '',
+          model: 'gpt-4.1',
+          default_level: 'medium',
+          description: '',
+          system_prompt: '',
+          domain_tags: [],
+          evaluation_criteria: [],
+          expertise: [],
+          personality: { traits: [], communication_style: '', weakness: '' },
+        };
+      },
+
+      // ================================================================
+      // Computed
+      // ================================================================
+
+      get hasAnyStats() {
+        return this.roles.some(r => r.stats && r.stats.session_count > 0);
+      },
+
+      // ロール間比較用: 参加実績を持つ全ロール (デフォルト + カスタム)。
+      // /api/roles はカスタムも含めて返すので、フィードバック履歴が
+      // 一件でもあれば自動にここに含まれる。
+      get rolesWithStats() {
+        return this.roles
+          .filter(r => r.stats && r.stats.session_count > 0)
+          .slice()
+          .sort((a, b) => (b.stats.peer_avg ?? 0) - (a.stats.peer_avg ?? 0));
+      },
+
+      get topRated() {
+        const list = this.rolesWithStats;
+        if (!list.length) return null;
+        return list.slice().sort(
+          (a, b) => (b.stats.peer_avg ?? 0) - (a.stats.peer_avg ?? 0)
+        )[0];
+      },
+
+      get topMVP() {
+        const list = this.rolesWithStats;
+        if (!list.length) return null;
+        return list.slice().sort(
+          (a, b) => (b.stats.mvp_count ?? 0) - (a.stats.mvp_count ?? 0)
+        )[0];
+      },
+
+      get mostActive() {
+        const list = this.rolesWithStats;
+        if (!list.length) return null;
+        return list.slice().sort(
+          (a, b) => (b.stats.session_count ?? 0) - (a.stats.session_count ?? 0)
+        )[0];
+      },
+
+      // フォームの全バリデーションが通っているか。
+      get isFormValid() {
+        const e = this.formErrors || {};
+        return Object.keys(e).every(k => !e[k]);
+      },
+
+      // AI 生成ボタンの活性判定。
+      get canGenerate() {
+        const f = this.formData || {};
+        return Boolean((f.description || '').trim());
+      },
+
+      // フォームのプレビュー用データ (新スキーマ)。
+      get formPreview() {
+        const f = this.formData || {};
+        const trim = (arr) => (arr || []).map(s => (s || '').trim()).filter(Boolean);
+        return {
+          description: (f.description || '').trim(),
+          domain_tags: trim(f.domain_tags),
+        };
+      },
+
+      // ================================================================
+      // Lifecycle
+      // ================================================================
+
+      init() {
+        this.loadRoles();
+        this.loadModels();
+      },
+
+      destroy() {
+        if (this.chartInstance) {
+          this.chartInstance.destroy();
+          this.chartInstance = null;
+        }
+      },
+
+      // ================================================================
+      // API
+      // ================================================================
+
+      async loadRoles() {
+        this.loading = true;
+        try {
+          const res = await fetch('/api/roles');
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          this.roles = await res.json();
+        } catch (e) {
+          console.error(e);
+          toast('ロール情報の読み込みに失敗しました: ' + e.message, 'error');
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async selectRole(roleId) {
+        // 同一 ID なら閉じる
+        if (this.selectedRoleId === roleId) {
+          this.closeDetail();
+          return;
+        }
+
+        this.selectedRoleId = roleId;
+        this.selectedRole = null;
+
+        try {
+          const [detailRes, statsRes] = await Promise.all([
+            fetch('/api/roles/' + encodeURIComponent(roleId)),
+            fetch('/api/roles/' + encodeURIComponent(roleId) + '/stats'),
+          ]);
+
+          if (!detailRes.ok) throw new Error('詳細取得失敗 (HTTP ' + detailRes.status + ')');
+
+          const detail = await detailRes.json();
+          if (statsRes.ok) {
+            detail.stats = await statsRes.json();
+          }
+          this.selectedRole = detail;
+
+          // チャート描画 + スクロール
+          this.$nextTick(() => {
+            this.drawScoreChart();
+            const panel = document.getElementById('role-detail-panel');
+            if (panel) {
+              panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          });
+        } catch (e) {
+          console.error(e);
+          toast('ロール詳細の読み込みに失敗しました: ' + e.message, 'error');
+          this.selectedRoleId = null;
+        }
+      },
+
+      closeDetail() {
+        this.destroy();
+        this.selectedRoleId = null;
+        this.selectedRole = null;
+      },
+
+      // ================================================================
+      // Chart
+      // ================================================================
+
+      drawScoreChart() {
+        const history = this.selectedRole?.stats?.history;
+        if (!history || history.length < 2) return;
+
+        const canvas = this.$refs.scoreChart;
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        // 既存インスタンス破棄 (メモリリーク防止)
+        if (this.chartInstance) {
+          this.chartInstance.destroy();
+          this.chartInstance = null;
+        }
+
+        const labels = history.map(h => {
+          const d = (h.date || '').toString();
+          return d.length >= 10 ? d.slice(5, 10) : d;
+        });
+
+        this.chartInstance = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: '自己評価',
+                data: history.map(h => h.self_eval_avg ?? 0),
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+              },
+              {
+                label: '他者評価',
+                data: history.map(h => h.peer_eval_avg ?? 0),
+                borderColor: '#0EA5E9',
+                backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { boxWidth: 12, padding: 16, font: { size: 11 } },
+              },
+            },
+            scales: {
+              y: {
+                min: 1,
+                max: 5,
+                ticks: { stepSize: 1, font: { size: 10 } },
+                grid: { color: 'rgba(148, 163, 184, 0.2)' },
+              },
+              x: {
+                ticks: { font: { size: 10 } },
+                grid: { display: false },
+              },
+            },
+          },
+        });
+      },
+
+      // ================================================================
+      // Helpers
+      // ================================================================
+
+      /** MVP 率をパーセントで返す (0-100)。 */
+      mvpRatePct(role) {
+        const s = role.stats;
+        if (!s || !s.session_count) return 0;
+        return Math.round((s.mvp_count ?? 0) / s.session_count * 100);
+      },
+
+      /** トレンド ID → 日本語ラベル。 */
+      trendLabel(trend) {
+        return {
+          improving: '上昇',
+          declining: '下降',
+          stable: '安定',
+        }[trend] || '安定';
+      },
+
+      /** トレンド ID → アイコンのみ (テーブル用)。
+       *  ※ template x-if で SVG 分岐するため UI 側では直接使わないが
+       *  後方互換のため名前のみ返す。 */
+      trendIcon(trend) {
+        return {
+          improving: 'arrow-trending-up',
+          declining: 'arrow-trending-down',
+          stable: 'arrow-right',
+        }[trend] || 'arrow-right';
+      },
+
+      /** フィードバック日付を YYYY/MM/DD に整形。 */
+      formatFbDate(dateStr) {
+        if (!dateStr) return '';
+        const s = String(dateStr);
+        // YYYY-MM-DD or ISO datetime
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return m[1] + '/' + m[2] + '/' + m[3];
+        // YYYY/MM/DD はそのまま
+        if (/^\d{4}\/\d{2}\/\d{2}/.test(s)) return s.slice(0, 10);
+        return s.slice(0, 10);
+      },
+
+      // ================================================================
+      // CRUD (Form)
+      // ================================================================
+
+      async loadModels() {
+        try {
+          const res = await fetch('/api/roles/_models');
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.availableModels = data.models || [];
+        } catch (e) {
+          console.error(e);
+          this.availableModels = ['gpt-5.4', 'gpt-4.1', 'gpt-4.1-mini', 'claude-sonnet-4-5'];
+        }
+      },
+
+      async openCreateForm() {
+        let tmpl = null;
+        try {
+          const res = await fetch('/api/roles/_template');
+          tmpl = res.ok ? await res.json() : null;
+        } catch (e) {
+          console.error('openCreateForm: fetch template failed', e);
+        }
+        const normalized = tmpl
+          ? this._normalizeIntoFormData(tmpl)
+          : this._emptyFormData();
+        this._applyToFormData(normalized);
+        this.formMode = 'create';
+        this.formErrors = {};
+        this.generatedExpanded = false;
+        this.generateError = '';
+        this.validateForm();
+        this.$nextTick(() => this._scrollFormIntoView());
+      },
+
+      async openEditForm(roleId) {
+        try {
+          const res = await fetch('/api/roles/' + encodeURIComponent(roleId));
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const detail = await res.json();
+          const raw = detail.raw || {};
+          const normalized = this._normalizeIntoFormData({
+            ...raw,
+            _emoji: raw._emoji ?? detail.emoji ?? '',
+            _name: raw._name ?? detail.name ?? '',
+          });
+          this._applyToFormData(normalized);
+          this.formMode = 'edit';
+          this.formErrors = {};
+          this.generatedExpanded = true;
+          this.generateError = '';
+          this.validateForm();
+          this.$nextTick(() => this._scrollFormIntoView());
+        } catch (e) {
+          console.error('openEditForm failed:', e);
+          toast('ロール情報の取得に失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      closeForm() {
+        this.formMode = null;
+        this._applyToFormData(this._emptyFormData());
+        this.formErrors = {};
+        this.generatedExpanded = false;
+        this.generateError = '';
+        this.generating = false;
+      },
+
+      // 新しい formData 値を既存プロキシに 1 プロパティずつ代入する。
+      // Alpine の x-model バインディングが各プロパティ setter を中継するため
+      // このスタイルが最も確実に UI へ反映される。
+      _applyToFormData(src) {
+        this.formData.role_id = src.role_id ?? '';
+        this.formData._emoji = src._emoji ?? '';
+        this.formData._name = src._name ?? '';
+        this.formData.model = src.model ?? 'gpt-4.1';
+        this.formData.default_level = src.default_level ?? 'medium';
+        this.formData.description = src.description ?? '';
+        this.formData.system_prompt = src.system_prompt ?? '';
+        this.formData.domain_tags = Array.isArray(src.domain_tags)
+          ? [...src.domain_tags]
+          : [];
+        this.formData.evaluation_criteria = Array.isArray(src.evaluation_criteria)
+          ? src.evaluation_criteria.map(c => ({
+              name: c?.name ?? '',
+              description: c?.description ?? '',
+            }))
+          : [];
+        // AI 自動生成で埋まるロール固有フィールド。詳細パネルでの
+        // 専門分野/性格/弱み/発言ルールの表示に利用される。
+        this.formData.expertise = Array.isArray(src.expertise)
+          ? [...src.expertise]
+          : [];
+        const p = src.personality || {};
+        this.formData.personality = {
+          traits: Array.isArray(p.traits) ? [...p.traits] : [],
+          communication_style: p.communication_style ?? '',
+          weakness: p.weakness ?? '',
+        };
+      },
+
+      async generateRoleConfig() {
+        if (!this.canGenerate || this.generating) return;
+        this.generating = true;
+        this.generateError = '';
+        try {
+          const res = await fetch('/api/roles/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              description: (this.formData.description || '').trim(),
+              perspective: '',
+              tone: '',
+              display_name: (this.formData._name || '').trim(),
+              emoji: (this.formData._emoji || '').trim(),
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const detail = typeof body.detail === 'string'
+              ? body.detail
+              : 'AI生成に失敗しました。もう一度お試しください。';
+            this.generateError = detail;
+            this.generatedExpanded = true;
+            toast(detail, 'error');
+            return;
+          }
+          const data = await res.json();
+          if (data.system_prompt) {
+            this.formData.system_prompt = data.system_prompt;
+          }
+          if (Array.isArray(data.domain_tags) && data.domain_tags.length) {
+            this.formData.domain_tags = data.domain_tags;
+          }
+          if (Array.isArray(data.evaluation_criteria) && data.evaluation_criteria.length) {
+            this.formData.evaluation_criteria = data.evaluation_criteria;
+          }
+          if (Array.isArray(data.expertise) && data.expertise.length) {
+            this.formData.expertise = data.expertise;
+          }
+          if (data.personality && typeof data.personality === 'object') {
+            const p = data.personality;
+            this.formData.personality = {
+              traits: Array.isArray(p.traits) ? p.traits : [],
+              communication_style: p.communication_style || '',
+              weakness: p.weakness || '',
+            };
+          }
+          this.generatedExpanded = true;
+          this.validateForm();
+          toast('AI 生成が完了しました', 'success');
+        } catch (e) {
+          console.error(e);
+          this.generateError = e.message || '通信エラーが発生しました';
+          this.generatedExpanded = true;
+          toast('AI生成に失敗しました: ' + e.message, 'error');
+        } finally {
+          this.generating = false;
+        }
+      },
+
+      _scrollFormIntoView() {
+        const el = document.querySelector('[x-show="formMode !== null"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+
+      _normalizeIntoFormData(src) {
+        const empty = this._emptyFormData();
+        const merged = { ...empty, ...src };
+        // 旧スキーマの description/perspective/tone を 1 つに統合して
+        // description フィールドに集約する (UI は 1 textarea)。
+        merged.description = this._mergeCharacterFields(src);
+        // system_prompt: 既存プロンプトからプレースホルダを除去して表示。
+        // 共通テンプレート (Layer 1) 側で自動付与されるため、編集フォームでは
+        // 純粋なロール固有部分だけをユーザーに見せる。保存時はこのまま送るだけで
+        // Agent が結合するので二重展開にはならない。
+        merged.system_prompt = this._stripPromptPlaceholders(
+          src?.system_prompt ?? ''
+        );
+        // ドメインタグ・評価基準は配列を保つ (無ければ空配列)
+        if (!Array.isArray(merged.domain_tags)) merged.domain_tags = [];
+        merged.domain_tags = merged.domain_tags.filter(t => (t || '').trim());
+        if (!Array.isArray(merged.evaluation_criteria)) merged.evaluation_criteria = [];
+        return merged;
+      },
+
+      // 入力情報の description / perspective / tone のいずれかが入っていれば
+      // 改行で結合して 1 つのテキストにする。全て空なら空文字。
+      _mergeCharacterFields(src) {
+        const parts = [
+          (src?.description || '').trim(),
+          (src?.perspective || '').trim(),
+          (src?.tone || '').trim(),
+        ].filter(Boolean);
+        return parts.join('\n');
+      },
+
+      // {orchestrator_instruction} / {feedback_context} を除去し、
+      // 過剰な空行を 1 個にまとめて trim する。
+      _stripPromptPlaceholders(prompt) {
+        return (prompt || '')
+          .replace(/\{orchestrator_instruction\}/g, '')
+          .replace(/\{feedback_context\}/g, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      },
+
+      // フォーム全フィールド検証。formErrors を更新。
+      validateForm() {
+        const errs = {};
+        const f = this.formData;
+
+        // role_id (新規時のみ検証)
+        if (this.formMode === 'create') {
+          const rid = (f.role_id || '').trim();
+          if (!rid) errs.role_id = 'role_id は必須です';
+          else if (rid.length < 2) errs.role_id = 'role_id は 2 文字以上です';
+          else if (rid.length > 30) errs.role_id = 'role_id は 30 文字以下です';
+          else if (!/^[a-z][a-z0-9_]*$/.test(rid)) {
+            errs.role_id = '先頭は英小文字、以降は英小文字/数字/_ のみ';
+          }
+        }
+
+        // 絵文字
+        if (!(f._emoji || '').trim()) errs._emoji = '絵文字は必須です';
+
+        // 表示名
+        if (!(f._name || '').trim()) errs._name = '表示名は必須です';
+        else if (/[<>]/.test(f._name)) errs._name = 'HTML タグは使用できません';
+
+        // system_prompt (必須)
+        const sp = f.system_prompt || '';
+        if (!sp.trim()) errs.system_prompt = 'system_prompt は必須です (AIで生成するか手動入力)';
+        else if (sp.length > 5000) errs.system_prompt = '5000 文字以下にしてください';
+
+        // 任意テキスト (description) の上限チェック
+        if ((f.description || '').length > 1500) {
+          errs.description = 'description は 1500 文字以下にしてください';
+        }
+
+        // evaluation_criteria: 存在する場合のみ 3〜5 件を検証
+        const crit = f.evaluation_criteria || [];
+        if (crit.length > 5) {
+          errs.evaluation_criteria = '5 件以下にしてください';
+        } else if (crit.length > 0 && crit.length < 3) {
+          errs.evaluation_criteria = '評価基準は 3 件以上か 0 件にしてください';
+        } else if (crit.some(c => !(c?.name || '').trim() || !(c?.description || '').trim())) {
+          errs.evaluation_criteria = '各基準の name と description を入力してください';
+        }
+
+        this.formErrors = errs;
+      },
+
+      // フォームを API に送る形式にビルドする (新スキーマ)。
+      _buildPayload() {
+        const f = this.formData;
+        const displayName = ((f._emoji || '').trim() + ' ' + (f._name || '').trim()).trim();
+        const p = f.personality || {};
+        return {
+          role_id: (f.role_id || '').trim(),
+          display_name: displayName,
+          model: f.model,
+          default_level: f.default_level,
+          // description に統合して送る (perspective/tone は UI から削除済)。
+          description: (f.description || '').trim(),
+          perspective: '',
+          tone: '',
+          domain_tags: (f.domain_tags || []).map(s => (s || '').trim()).filter(Boolean),
+          system_prompt: f.system_prompt || '',
+          evaluation_criteria: (f.evaluation_criteria || []).map(c => ({
+            name: (c.name || '').trim(),
+            description: (c.description || '').trim(),
+          })).filter(c => c.name && c.description),
+          // 詳細パネルの専門分野/性格/弱み/発言ルール表示を埋めるために YAML へ保存。
+          expertise: (f.expertise || []).map(s => (s || '').trim()).filter(Boolean),
+          personality: {
+            traits: (p.traits || []).map(s => (s || '').trim()).filter(Boolean),
+            communication_style: (p.communication_style || '').trim(),
+            weakness: (p.weakness || '').trim(),
+          },
+        };
+      },
+
+      async saveRole() {
+        this.validateForm();
+        if (!this.isFormValid) {
+          toast('入力内容に不備があります', 'error');
+          return;
+        }
+        this.saving = true;
+        const payload = this._buildPayload();
+        const isCreate = this.formMode === 'create';
+        const url = isCreate
+          ? '/api/roles'
+          : '/api/roles/' + encodeURIComponent(payload.role_id);
+        const method = isCreate ? 'POST' : 'PUT';
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const detail = body.detail;
+            if (res.status === 422 && detail && Array.isArray(detail.errors)) {
+              toast('入力エラー: ' + detail.errors.join(' / '), 'error');
+            } else if (res.status === 409) {
+              toast(typeof detail === 'string' ? detail : '同一 role_id が既に存在します', 'error');
+            } else {
+              toast('保存に失敗しました: HTTP ' + res.status, 'error');
+            }
+            return;
+          }
+          const roleId = payload.role_id;
+          toast(isCreate ? 'ロールを作成しました' : 'ロールを更新しました', 'success');
+          this.closeForm();
+          await this.loadRoles();
+          // 編集後はパネルを再ロード
+          if (this.selectedRoleId === roleId) {
+            this.selectedRole = null;
+            this.selectedRoleId = null;
+            await this.selectRole(roleId);
+          }
+        } catch (e) {
+          console.error(e);
+          toast('保存に失敗しました: ' + e.message, 'error');
+        } finally {
+          this.saving = false;
+        }
+      },
+
+      deleteRole(roleId) {
+        if (!roleId) {
+          console.warn('deleteRole: role_id is empty');
+          return;
+        }
+        const role = this.roles.find(r => r.id === roleId) || this.selectedRole;
+        const name = role?.name || roleId;
+        window.dispatchEvent(new CustomEvent('open-modal', {
+          detail: {
+            title: 'ロールを削除しますか？',
+            message: `ロール "${name}" (${roleId}) を削除します。このロールの過去フィードバック履歴も失われます。この操作は取り消せません。`,
+            confirmLabel: '削除する',
+            action: async () => {
+              try {
+                const url = '/api/roles/' + encodeURIComponent(roleId);
+                console.log('deleteRole: DELETE', url);
+                const res = await fetch(url, { method: 'DELETE' });
+                if (!res.ok) {
+                  const body = await res.json().catch(() => ({}));
+                  const detail = typeof body.detail === 'string'
+                    ? body.detail
+                    : JSON.stringify(body.detail || {});
+                  console.error('deleteRole failed:', res.status, detail);
+                  if (res.status === 403) {
+                    toast(detail || 'デフォルトロールは削除できません', 'error');
+                  } else if (res.status === 404) {
+                    toast('ロールが見つかりませんでした', 'error');
+                  } else {
+                    toast('削除に失敗しました: HTTP ' + res.status, 'error');
+                  }
+                  return;
+                }
+                toast('ロールを削除しました', 'success');
+                if (this.selectedRoleId === roleId) this.closeDetail();
+                await this.loadRoles();
+              } catch (e) {
+                console.error('deleteRole exception:', e);
+                toast('削除に失敗しました: ' + (e.message || e), 'error');
+              }
+            },
+          },
+        }));
+      },
+
+      // リスト項目操作
+      addListItem(field) {
+        const parts = field.split('.');
+        let obj = this.formData;
+        for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+        const key = parts[parts.length - 1];
+        if (!Array.isArray(obj[key])) obj[key] = [];
+        obj[key].push('');
+        this.validateForm();
+      },
+
+      removeListItem(field, index) {
+        const parts = field.split('.');
+        let obj = this.formData;
+        for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+        const key = parts[parts.length - 1];
+        if (Array.isArray(obj[key]) && index >= 0 && index < obj[key].length) {
+          obj[key].splice(index, 1);
+        }
+        this.validateForm();
+      },
+
+      addDomainTag(tag) {
+        const list = this.formData.domain_tags || [];
+        if (list.includes(tag)) return;
+        // 空欄があればそこに、なければ末尾に
+        const emptyIdx = list.findIndex(s => !(s || '').trim());
+        if (emptyIdx >= 0) list[emptyIdx] = tag;
+        else list.push(tag);
+        this.validateForm();
+      },
+
+      addCriteria() {
+        if ((this.formData.evaluation_criteria || []).length >= 5) return;
+        this.formData.evaluation_criteria.push({ name: '', description: '' });
+        this.validateForm();
+      },
+
+      removeCriteria(index) {
+        const list = this.formData.evaluation_criteria || [];
+        if (index >= 0 && index < list.length) list.splice(index, 1);
+        this.validateForm();
+      },
+    };
+  }
+</script>
+{% endblock %}

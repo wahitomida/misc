@@ -1,0 +1,14 @@
+# Local outputs and caches
+output/
+__pycache__/
+*.py[cod]
+*.log
+.coverage
+.pytest_cache/
+.venv/
+
+# Secrets and runtime state
+.env
+.env.*
+.rate_tracker.json
+.orchestra_rate_limit.json

@@ -1,0 +1,71 @@
+{# ファイルドラッグ&ドロップ
+   設計書: doc/ui/03_components.md §7
+
+   親スコープ (Alpine.js) に以下が必要:
+     - attachedFiles: []
+     - isDragging: false
+     - MAX_FILES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE (定数)
+     - handleDrop(event), handleFileSelect(event), removeFile(index),
+       formatFileSize(bytes)
+#}
+{% import "components/icon.html" as ui %}
+<div class="space-y-3">
+
+  {# ドロップゾーン #}
+  <div class="relative border-2 border-dashed rounded-xl p-6 text-center
+              transition cursor-pointer"
+       :class="{
+         'border-sky-400 bg-sky-50 dark:bg-sky-900/20': isDragging,
+         'border-slate-300 dark:border-slate-600 hover:border-sky-300 dark:hover:border-sky-600': !isDragging,
+       }"
+       @dragover.prevent="isDragging = true"
+       @dragleave.prevent="isDragging = false"
+       @drop.prevent="handleDrop($event)"
+       @click="$refs.fileInput.click()">
+
+    <input type="file" multiple
+           x-ref="fileInput"
+           @change="handleFileSelect($event)"
+           accept=".py,.yaml,.json,.md,.txt,.csv"
+           class="hidden">
+
+    <div class="flex justify-center mb-2 text-slate-400">
+      {{ ui.icon('paper-clip', 'w-10 h-10') }}
+    </div>
+    <p class="text-sm text-slate-600 dark:text-slate-400">
+      ファイルをドラッグ&ドロップ、またはクリックして選択
+    </p>
+    <p class="text-xs text-slate-400 mt-1">
+      .py, .yaml, .json, .md, .txt, .csv (最大5ファイル)
+    </p>
+  </div>
+
+  {# 追加済みファイルリスト #}
+  <template x-if="attachedFiles.length > 0">
+    <div class="space-y-2">
+      <template x-for="(file, index) in attachedFiles" :key="index">
+        <div class="flex items-center justify-between p-2 rounded-lg
+                    bg-slate-50 dark:bg-slate-700/50">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-slate-500 flex-shrink-0">{{ ui.icon('document', 'w-4 h-4') }}</span>
+            <span class="text-sm text-slate-700 dark:text-slate-300 truncate"
+                  x-text="file.name"></span>
+            <span class="text-xs text-slate-400 flex-shrink-0"
+                  x-text="formatFileSize(file.size)"></span>
+          </div>
+          <button @click.stop="removeFile(index)"
+                  class="text-red-400 hover:text-red-600 transition p-1 flex-shrink-0"
+                  aria-label="削除">
+            {{ ui.icon('x-mark', 'w-4 h-4') }}
+          </button>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  {# ファイル数表示 #}
+  <div class="text-xs text-slate-400 text-right"
+       x-show="attachedFiles.length > 0"
+       x-text="attachedFiles.length + ' / ' + MAX_FILES + ' ファイル'">
+  </div>
+</div>

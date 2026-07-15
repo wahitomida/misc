@@ -1,0 +1,81 @@
+{# 仮説テーブル
+   設計書: doc/ui/03_components.md §6
+
+   親スコープに必要:
+     - hypotheses: [{ id, text, status, evidence, source_round }]
+     - selectable: bool (フォローアップ時のみ true)
+     - selectedHypotheses: string[] (選択された仮説IDリスト)
+#}
+{% import "components/icon.html" as ui %}
+<div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+            border border-slate-200 dark:border-slate-700 shadow-sm"
+     x-show="hypotheses && hypotheses.length">
+  <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+             text-slate-800 dark:text-slate-200">
+    <span class="text-sky-500">{{ ui.icon('beaker', 'w-5 h-5') }}</span> 仮説テーブル
+    <span class="text-sm font-normal text-slate-400"
+          x-text="'(' + (hypotheses?.length || 0) + '件)'"></span>
+  </h3>
+
+  <div class="space-y-3">
+    <template x-for="h in (hypotheses || [])" :key="h.id">
+      <div class="flex items-start gap-3 p-3 rounded-xl transition-colors"
+           :class="{
+             'bg-slate-50 dark:bg-slate-700/30': h.status === 'unverified' || !h.status,
+             'bg-green-50 dark:bg-green-900/20': h.status === 'confirmed',
+             'bg-red-50 dark:bg-red-900/20': h.status === 'rejected',
+             'bg-yellow-50 dark:bg-yellow-900/20': h.status === 'modified',
+           }">
+
+        {# チェックボックス (選択モード) #}
+        <template x-if="selectable">
+          <input type="checkbox"
+                 :value="h.id"
+                 x-model="selectedHypotheses"
+                 class="mt-1 rounded border-slate-300 text-sky-600
+                        focus:ring-sky-500 flex-shrink-0">
+        </template>
+
+        {# ステータスアイコン #}
+        <div class="flex-shrink-0 mt-0.5">
+          <span x-show="!h.status || h.status === 'unverified'" class="text-slate-400">
+            {{ ui.icon('stop-circle', 'w-5 h-5') }}
+          </span>
+          <span x-show="h.status === 'confirmed'" class="text-green-500 dark:text-green-400">
+            {{ ui.icon('check-circle', 'w-5 h-5') }}
+          </span>
+          <span x-show="h.status === 'rejected'" class="text-red-500 dark:text-red-400">
+            {{ ui.icon('x-circle', 'w-5 h-5') }}
+          </span>
+          <span x-show="h.status === 'modified'" class="text-yellow-500 dark:text-yellow-400">
+            {{ ui.icon('arrow-path', 'w-5 h-5') }}
+          </span>
+        </div>
+
+        {# 内容 #}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-mono font-bold text-slate-500"
+                  x-text="h.id"></span>
+            <span x-show="h.source_round"
+                  class="text-xs px-1.5 py-0.5 rounded text-slate-500
+                         bg-slate-200 dark:bg-slate-600"
+                  x-text="'R' + h.source_round"></span>
+          </div>
+          <p class="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap"
+             x-text="h.text"></p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"
+             x-show="h.evidence"
+             x-text="'根拠: ' + (h.evidence || '')"></p>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# 選択中件数 (選択モードのみ) #}
+  <template x-if="selectable && (selectedHypotheses?.length || 0) > 0">
+    <div class="mt-3 text-sm text-sky-600 dark:text-sky-400">
+      <span x-text="selectedHypotheses.length"></span> 件の仮説を重点検証に選択中
+    </div>
+  </template>
+</div>

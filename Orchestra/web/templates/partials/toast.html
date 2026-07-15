@@ -1,0 +1,58 @@
+{# トースト通知コンテナ
+   設計書: doc/ui/03_components.md §9
+#}
+{% import "components/icon.html" as ui %}
+<div id="toast-container"
+     x-data="toastManager()"
+     @show-toast.window="add($event.detail.message, $event.detail.type)"
+     class="fixed top-20 right-4 z-50 space-y-3 pointer-events-none"
+     role="status"
+     aria-live="polite"
+     aria-atomic="false"
+     aria-label="通知">
+
+  <template x-for="t in toasts" :key="t.id">
+    <div class="pointer-events-auto max-w-sm w-full
+                bg-white dark:bg-slate-800
+                border rounded-xl shadow-lg p-4
+                flex items-start gap-3
+                animate-slide-in-right"
+         :class="{
+           'border-green-300 dark:border-green-700': t.type === 'success',
+           'border-blue-300 dark:border-blue-700': t.type === 'info',
+           'border-amber-300 dark:border-amber-700': t.type === 'warning',
+           'border-red-300 dark:border-red-700': t.type === 'error',
+         }"
+         x-show="t.visible"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-x-0"
+         x-transition:leave-end="opacity-0 translate-x-4">
+
+      <div class="flex-shrink-0">
+        <span x-show="t.type === 'success'" class="text-green-500 dark:text-green-400">
+          {{ ui.icon('check-circle', 'w-5 h-5') }}
+        </span>
+        <span x-show="t.type === 'info'" class="text-blue-500 dark:text-blue-400">
+          {{ ui.icon('information-circle', 'w-5 h-5') }}
+        </span>
+        <span x-show="t.type === 'warning'" class="text-amber-500 dark:text-amber-400">
+          {{ ui.icon('exclamation-triangle', 'w-5 h-5') }}
+        </span>
+        <span x-show="t.type === 'error'" class="text-red-500 dark:text-red-400">
+          {{ ui.icon('x-circle', 'w-5 h-5') }}
+        </span>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-slate-800 dark:text-slate-200" x-text="t.message"></p>
+      </div>
+
+      <button @click="dismiss(t.id)"
+              class="flex-shrink-0 text-slate-400 hover:text-slate-600
+                     dark:hover:text-slate-300 transition"
+              aria-label="閉じる">
+        {{ ui.icon('x-mark', 'w-4 h-4') }}
+      </button>
+    </div>
+  </template>
+</div>

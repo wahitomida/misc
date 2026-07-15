@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}500 - サーバーエラー{% endblock %}
+{% block content %}
+{% import "components/icon.html" as ui %}
+<div class="flex flex-col items-center justify-center min-h-[60vh] text-center"
+     role="alert"
+     aria-live="assertive">
+  {{ ui.icon('exclamation-triangle',
+             'w-24 h-24 mb-6 text-red-500 dark:text-red-400',
+             stroke_width='1.5') }}
+  <h1 class="text-4xl md:text-5xl font-bold mb-2 text-slate-800 dark:text-slate-200">500</h1>
+  <p class="text-slate-500 dark:text-slate-400 mb-2">
+    内部エラーが発生しました
+  </p>
+  {% if error_detail %}
+  <p class="text-xs text-slate-400 font-mono mb-6 max-w-xl truncate">
+    {{ error_detail }}
+  </p>
+  {% else %}
+  <p class="text-sm text-slate-400 mb-6"
+     x-data x-text="'Error ID: ' + Date.now()"></p>
+  {% endif %}
+  <div class="flex gap-4">
+    <button onclick="window.location.reload()"
+            class="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl
+                   hover:bg-slate-300 dark:hover:bg-slate-600 transition focus-ring">
+      再読み込み
+    </button>
+    <a href="/" class="px-6 py-3 bg-sky-600 text-white rounded-xl
+                       hover:bg-sky-700 transition focus-ring">
+      ホームに戻る
+    </a>
+  </div>
+</div>
+{% endblock %}

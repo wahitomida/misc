@@ -1,0 +1,1972 @@
+{% extends "base.html" %}
+{% block title %}Idea Discussion — AI Orchestra{% endblock %}
+
+{% block content %}
+{% import "components/icon.html" as ui %}
+<div x-data="ideaPage()" x-init="init()">
+
+  {# ============================================================
+     ステップインジケーター (全ステップ共通)
+     ============================================================ #}
+  {% include "partials/step_indicator.html" %}
+
+  {# ============================================================
+     Step 1: テーマ入力
+     ============================================================ #}
+  <div x-show="step === 1" x-transition.opacity class="space-y-6">
+
+    {# ---------- Hero: 議論テーマ (フル幅で目立たせる) ---------- #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+                border border-slate-200 dark:border-slate-700 shadow-sm
+                animate-fade-in">
+      <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+        <span class="text-sky-500">{{ ui.icon('pencil-square', 'w-5 h-5') }}</span>
+        議論テーマ <span class="text-red-500">*</span>
+      </label>
+      <textarea x-model="prompt"
+                @input="saveToStorage()"
+                rows="4"
+                maxlength="5000"
+                placeholder="例: LLMの推論効率を改善する手法を議論して"
+                class="w-full rounded-xl border
+                       bg-white dark:bg-slate-800
+                       text-slate-900 dark:text-slate-100
+                       px-4 py-3 text-base
+                       focus:ring-2 focus:ring-sky-500 focus:border-transparent
+                       resize-none transition"
+                :class="{
+                  'border-red-400 dark:border-red-500':
+                    prompt.length > 0 && prompt.length < 5,
+                  'border-slate-300 dark:border-slate-600':
+                    !(prompt.length > 0 && prompt.length < 5),
+                }"></textarea>
+      <div class="flex items-center justify-between mt-3 gap-3 flex-wrap">
+        <div class="text-xs flex items-center gap-3">
+          <span class="text-red-500" x-show="prompt.length > 0 && prompt.length < 5">
+            5文字以上入力してください
+          </span>
+          <span class="text-slate-400">
+            <span x-text="prompt.length">0</span> / 5,000
+          </span>
+        </div>
+        <button @click="submitPlan()"
+                :disabled="!isPromptValid || planLoading"
+                class="px-6 py-3 rounded-xl text-white font-medium
+                       bg-sky-600 hover:bg-sky-700
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       transition inline-flex items-center gap-2">
+          <svg x-show="planLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10"
+                    stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span x-show="!planLoading" class="inline-flex items-center gap-1">
+            {{ ui.icon('rocket-launch', 'w-4 h-4') }} 議論を計画する
+          </span>
+          <span x-show="planLoading">計画立案中...</span>
+        </button>
+      </div>
+    </div>
+
+    {# ---------- 2 カラム: 左 詳細設定 / 右 プレビュー ---------- #}
+    <div class="grid gap-6 md:grid-cols-5">
+
+      {# ────── 左カラム (3/5): 詳細設定 ────── #}
+      <div class="md:col-span-3 space-y-4">
+
+        {# モデル設定 #}
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-700">
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-slate-50 dark:hover:bg-slate-800/50 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('cog', 'w-4 h-4') }}</span> モデル設定
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">{{ ui.icon('chevron-down', 'w-3 h-3') }}</span>
+          </summary>
+          <div class="p-4 pt-0 space-y-4">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">計画立案モデル (Phase 1)</label>
+              <select x-model="settings.plannerModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-4.1">gpt-4.1 (推奨 / 高速)</option>
+                <option value="gpt-5.4">gpt-5.4 (高品質 / 低速)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">議論進行モデル (Phase 2)</label>
+              <select x-model="settings.conductorModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-4.1">gpt-4.1 (推奨)</option>
+                <option value="gpt-5.4">gpt-5.4 (高品質)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">統合モデル (Phase 3)</label>
+              <select x-model="settings.synthModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-5.4">gpt-5.4 (推奨)</option>
+                <option value="gpt-4.1">gpt-4.1 (標準)</option>
+              </select>
+            </div>
+          </div>
+        </details>
+
+        {# 高度な設定 #}
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-700">
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-slate-50 dark:hover:bg-slate-800/50 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('wrench', 'w-4 h-4') }}</span> 高度な設定
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">{{ ui.icon('chevron-down', 'w-3 h-3') }}</span>
+          </summary>
+          <div class="p-4 pt-0 space-y-4">
+            {# フォローアップ選択 #}
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">
+                フォローアップ (前回セッションを引き継ぐ)
+              </label>
+              <select x-model="settings.followUpId"
+                      @change="onFollowUpChanged()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="">なし (新規議論)</option>
+                <template x-for="s in previousSessions" :key="s.session_id">
+                  <option :value="s.session_id"
+                          x-text="sessionOptionLabel(s)"></option>
+                </template>
+              </select>
+            </div>
+
+            {# フォローアップ選択時: 仮説プレビュー #}
+            <template x-if="followUpContext">
+              <div class="p-3 rounded-xl bg-sky-50 dark:bg-sky-900/20
+                          border border-sky-200 dark:border-sky-700">
+                <div class="text-xs font-medium text-sky-700 dark:text-sky-300 mb-2 inline-flex items-center gap-1">
+                  {{ ui.icon('clipboard-list', 'w-3.5 h-3.5') }} 前回の情報
+                </div>
+                <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                  <div>
+                    チェーン深度:
+                    <span class="font-mono" x-text="(followUpContext.chain || []).length"></span>
+                  </div>
+                  <div x-show="followUpContext.hypotheses">
+                    仮説数:
+                    <span class="font-mono"
+                          x-text="(followUpContext.hypotheses || []).length"></span>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            {# 添付ファイル #}
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">
+                添付ファイル (議論の参考資料)
+              </label>
+              {% include "components/file_drop.html" %}
+            </div>
+          </div>
+        </details>
+      </div>
+
+      {# ────── 右カラム (2/5, sticky): プレビュー ────── #}
+      <div class="md:col-span-2">
+        <div class="md:sticky md:top-24 space-y-4">
+
+          {# 候補 AI 一覧 (全ロール、使用率降順) #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-2">
+              <span class="text-sky-500">{{ ui.icon('user-group', 'w-4 h-4') }}</span>
+              候補 AI
+              <span class="text-xs text-slate-400 font-normal ml-auto"
+                    x-text="settings.preferredRoleIds.length
+                      ? ('選択 ' + settings.preferredRoleIds.length + ' / 全 ' + availableRoles.length + ' 人')
+                      : ('使用率順 (全 ' + availableRoles.length + ' 人)')"></span>
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="(role, idx) in availableRoles" :key="role.id">
+                <button type="button"
+                        @click="togglePreferredRole(role.id)"
+                        class="relative group animate-fade-in"
+                        :style="'animation-delay: ' + (idx * 30) + 'ms'">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg
+                              border-2 transition cursor-pointer"
+                       :class="settings.preferredRoleIds.includes(role.id)
+                         ? 'bg-sky-100 dark:bg-sky-900/40 border-sky-500 ring-2 ring-sky-300 dark:ring-sky-700 shadow'
+                         : (idx < settings.maxAgents
+                            ? 'bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-500 hover:border-sky-400'
+                            : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 opacity-60 hover:opacity-100 hover:border-sky-400')"
+                       x-text="role.emoji || '🎭'"></div>
+                  {# 選択中チェックマーク #}
+                  <span x-show="settings.preferredRoleIds.includes(role.id)"
+                        class="absolute -top-1 -right-1 w-4 h-4 rounded-full
+                               bg-sky-500 text-white text-[10px] font-bold
+                               flex items-center justify-center shadow">✓</span>
+                  {# ツールチップ #}
+                  <div class="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap
+                              px-2 py-0.5 rounded text-xs
+                              bg-slate-900 text-white opacity-0 group-hover:opacity-100
+                              pointer-events-none transition z-10"
+                       x-text="role.name + ' (参加 ' + (role.stats?.session_count ?? 0) + ' 回)'"></div>
+                </button>
+              </template>
+            </div>
+            <div class="flex items-center justify-between mt-3 gap-2">
+              <p class="text-xs text-slate-400">
+                <span x-show="!settings.preferredRoleIds.length">
+                  クリックで使いたい AI を選択 (未選択なら自動選定)
+                </span>
+                <span x-show="settings.preferredRoleIds.length">
+                  選択した AI を優先して指揮者が選定します
+                </span>
+              </p>
+              <button type="button"
+                      x-show="settings.preferredRoleIds.length"
+                      @click="clearPreferredRoles()"
+                      class="text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                選択をクリア
+              </button>
+            </div>
+
+            {# 最大参加AI数 スライダー (候補 AI 枚の下部に配置) #}
+            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-xs text-slate-500">最大参加AI数</label>
+                <span class="text-sm font-mono font-medium text-sky-600 dark:text-sky-400"
+                      x-text="settings.maxAgents + '名'">5名</span>
+              </div>
+              <input type="range"
+                     x-model.number="settings.maxAgents"
+                     min="2" max="8" step="1"
+                     @input="onMaxAgentsChange()"
+                     class="w-full h-2 rounded-full appearance-none cursor-pointer
+                            bg-slate-200 dark:bg-slate-700 accent-sky-600">
+              <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span>2名</span>
+                <span>8名</span>
+              </div>
+            </div>
+          </div>
+
+          {# 推定所要時間 #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-2 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('clock', 'w-4 h-4') }}</span> 推定所要時間
+            </h4>
+            <div class="text-2xl font-mono font-bold text-sky-600 dark:text-sky-400"
+                 x-text="formatTime(settings.timeLimit)">5:00</div>
+            <div class="text-xs text-slate-400 mt-1">
+              Phase 1 (計画) + Phase 2 (議論) + Phase 3 (統合)
+            </div>
+
+            {# 制限時間スライダー (推定所要時間の下部に配置) #}
+            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-xs text-slate-500">制限時間</label>
+                <span class="text-xs font-mono text-sky-600 dark:text-sky-400"
+                      x-text="formatTime(settings.timeLimit)">5:00</span>
+              </div>
+              <input type="range"
+                     x-model.number="settings.timeLimit"
+                     min="60" max="1800" step="30"
+                     @input="saveToStorage()"
+                     class="w-full h-2 rounded-full appearance-none cursor-pointer
+                            bg-slate-200 dark:bg-slate-700 accent-sky-600">
+              <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span>1分</span>
+                <span>30分</span>
+              </div>
+            </div>
+          </div>
+
+          {# リソース見積 #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-2 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('chart-bar', 'w-4 h-4') }}</span> リソース見積
+            </h4>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-slate-500">推定リクエスト</span>
+                <span class="font-medium" x-text="'約' + estimatedRequests"></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500">残りクォータ</span>
+                <span class="font-medium" x-text="remainingQuota.toLocaleString()"></span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full bg-teal-500 rounded-full transition-all"
+                     :style="'width: ' + Math.min(100, (estimatedRequests / Math.max(1, remainingQuota)) * 100) + '%'">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# フォローアップ情報 #}
+          <template x-if="followUpContext">
+            <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4
+                        border border-amber-200 dark:border-amber-700 shadow-sm">
+              <h4 class="text-sm font-medium text-amber-700 dark:text-amber-300 mb-2 inline-flex items-center gap-1.5">
+                {{ ui.icon('arrow-path', 'w-4 h-4') }} フォローアップ
+              </h4>
+              <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                <div>
+                  前回:
+                  <span class="font-mono" x-text="settings.followUpId"></span>
+                </div>
+                <div>
+                  チェーン深度:
+                  <span class="font-mono" x-text="(followUpContext.chain || []).length"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 2: 計画確認
+     ============================================================ #}
+  <div x-show="step === 2" x-transition.opacity class="space-y-6">
+    <h2 class="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-200
+               flex items-center gap-2">
+      <span class="text-sky-500">{{ ui.icon('clipboard-list', 'w-6 h-6') }}</span>
+      <span>議論計画</span>
+    </h2>
+
+    {% include "components/plan_card.html" %}
+
+    {# アクションバー #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4
+                border-t border-slate-200 dark:border-slate-700">
+      <button @click="step = 1"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl
+                     text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center justify-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>テーマを修正</span>
+      </button>
+
+      <button @click="startDiscussion()"
+              :disabled="startLoading || !plan"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl text-white font-medium
+                     bg-gradient-to-r from-sky-600 to-cyan-600
+                     hover:from-sky-700 hover:to-cyan-700
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition shadow-lg shadow-sky-200 dark:shadow-sky-900/50
+                     flex items-center justify-center gap-2">
+        <svg x-show="startLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10"
+                  stroke="currentColor" stroke-width="4" fill="none"></circle>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span x-show="!startLoading" class="inline-flex items-center gap-1">
+          {{ ui.icon('play-circle', 'w-4 h-4') }} 議論を開始する
+        </span>
+        <span x-show="startLoading">準備中...</span>
+      </button>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 3: リアルタイム議論
+     ============================================================ #}
+  <div x-show="step === 3" x-transition.opacity>
+
+    {# モバイル上部固定バー (md未満) #}
+    <div class="md:hidden fixed top-16 left-0 right-0 z-30
+                bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
+                border-b border-slate-200 dark:border-slate-700
+                px-4 py-2">
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-xs text-slate-500">
+          Round <span x-text="currentRound">0</span> / <span x-text="totalRounds">0</span>
+        </div>
+        <div class="text-sm font-mono font-bold"
+             :class="{
+               'text-teal-600 dark:text-green-400': timePressure === 'relaxed',
+               'text-yellow-600 dark:text-yellow-400': timePressure === 'moderate',
+               'text-orange-600 dark:text-orange-400': timePressure === 'urgent',
+               'text-red-600 dark:text-red-400 animate-pulse': timePressure === 'critical',
+             }"
+             x-text="formatTime(remainingSec)">5:00</div>
+      </div>
+      <div class="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div class="h-full transition-all duration-1000 ease-linear"
+             :class="{
+               'bg-teal-500': timePressure === 'relaxed',
+               'bg-yellow-500': timePressure === 'moderate',
+               'bg-orange-500': timePressure === 'urgent',
+               'bg-red-500': timePressure === 'critical',
+             }"
+             :style="'width: ' + Math.max(0, Math.min(100, (remainingSec / Math.max(1, timeLimit)) * 100)) + '%'"></div>
+      </div>
+    </div>
+
+    {# メインレイアウト #}
+    <div class="flex gap-6 md:pt-0 pt-16 md:pb-0 pb-20">
+
+      {# ────── サイドバー (デスクトップのみ) ────── #}
+      <aside class="w-72 flex-shrink-0 space-y-4 hidden md:block">
+        {% include "components/timer.html" %}
+
+        {# ラウンド情報 #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            ラウンド情報
+          </h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500">ラウンド</span>
+              <span class="font-medium">
+                <span x-text="currentRound">0</span> / <span x-text="totalRounds">0</span>
+              </span>
+            </div>
+            <div class="flex justify-between items-center" x-show="currentPhase">
+              <span class="text-slate-500">フェーズ</span>
+              <span class="text-xs px-2 py-0.5 rounded-full"
+                    :class="phaseColorClass"
+                    x-text="currentPhase"></span>
+            </div>
+            <div class="flex justify-between" x-show="currentPattern">
+              <span class="text-slate-500">パターン</span>
+              <span class="font-mono text-xs" x-text="currentPattern"></span>
+            </div>
+          </div>
+        </div>
+
+        {# 参加AI #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            参加AI
+          </h4>
+          <div class="space-y-2">
+            <template x-for="agent in participatingAgents" :key="agent.role_id">
+              <div x-data="{ get status() { return $root.getAgentStatus(agent.role_id); } }">
+                {% include "components/agent_badge.html" %}
+              </div>
+            </template>
+            <template x-if="!participatingAgents.length">
+              <p class="text-xs text-slate-400">参加者情報を取得中...</p>
+            </template>
+          </div>
+        </div>
+
+        {# 統計 #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            統計
+          </h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500">発言数</span>
+              <span class="font-mono font-medium" x-text="stats.utteranceCount">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">トークン</span>
+              <span class="font-mono font-medium"
+                    x-text="stats.totalTokens.toLocaleString()">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">収束度</span>
+              <span class="font-mono font-medium"
+                    x-text="stats.convergence.toFixed(2)">0.00</span>
+            </div>
+          </div>
+        </div>
+
+        {# 中断ボタン #}
+        <button @click="confirmAbort()"
+                class="w-full py-2 px-4 rounded-xl text-red-600 dark:text-red-400
+                       bg-red-50 dark:bg-red-900/20
+                       border border-red-200 dark:border-red-800
+                       hover:bg-red-100 dark:hover:bg-red-900/40
+                       transition text-sm font-medium inline-flex items-center justify-center gap-1">
+          {{ ui.icon('stop-circle', 'w-4 h-4') }} 中断する
+        </button>
+      </aside>
+
+      {# ────── チャットエリア ────── #}
+      <div class="flex-1 flex flex-col min-w-0 relative
+                  h-[calc(100vh-160px)] md:h-[calc(100vh-180px)]">
+
+        {# チャットヘッダー (デスクトップのみ) #}
+        <div class="hidden md:flex items-center justify-between px-4 py-3
+                    bg-white dark:bg-slate-800
+                    border border-slate-200 dark:border-slate-700
+                    rounded-t-xl">
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">
+              Round <span x-text="currentRound">0</span>
+            </span>
+            <span x-show="currentPhase"
+                  class="text-xs px-2 py-0.5 rounded-full"
+                  :class="phaseColorClass"
+                  x-text="currentPhase"></span>
+            <span x-show="currentPattern"
+                  class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700
+                         text-slate-600 dark:text-slate-300 font-mono"
+                  x-text="currentPattern"></span>
+          </div>
+          <div class="text-xs text-slate-400">
+            <span x-text="stats.utteranceCount">0</span> 発言
+          </div>
+        </div>
+
+        {# メッセージ一覧 #}
+        <div x-ref="chatContainer"
+             @scroll="handleScroll()"
+             role="log"
+             aria-live="polite"
+             aria-relevant="additions"
+             aria-label="議論の発言ログ"
+             class="flex-1 overflow-y-auto p-4 space-y-1
+                    bg-slate-50 dark:bg-slate-900/50
+                    md:border-x md:border-b border-slate-200 dark:border-slate-700
+                    md:rounded-b-xl custom-scrollbar">
+
+          <template x-for="item in chatItems" :key="item.id">
+            <div>
+              {% include "components/chat_bubble.html" %}
+            </div>
+          </template>
+
+          {# タイピングインジケーター #}
+          <template x-if="isAgentThinking && thinkingAgent">
+            <div class="flex items-center gap-3 mb-4 animate-fade-in">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800
+                          flex items-center justify-center text-xl">
+                <span x-text="thinkingAgent.emoji || '🎭'"></span>
+              </div>
+              <div class="px-4 py-3 rounded-2xl rounded-tl-sm
+                          bg-slate-100 dark:bg-slate-700">
+                <div class="flex items-center gap-1">
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 0ms"></span>
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 150ms"></span>
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 300ms"></span>
+                </div>
+              </div>
+              <span class="text-xs text-slate-400"
+                    x-text="(thinkingAgent.name || '?') + ' が考え中...'"></span>
+            </div>
+          </template>
+
+          {# 空状態 (接続開始直後) #}
+          <template x-if="!chatItems.length && !isAgentThinking">
+            <div class="flex flex-col items-center justify-center py-16 text-center">
+              <div class="inline-flex items-center gap-3 px-6 py-4 rounded-2xl
+                          bg-white dark:bg-slate-800 shadow-sm
+                          border border-slate-200 dark:border-slate-700">
+                <svg class="animate-spin h-5 w-5 text-sky-600" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10"
+                          stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-sm text-slate-600 dark:text-slate-400">
+                  議論の準備中...
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        {# "最新へ" ボタン (下スクロール時のみ表示) #}
+        <div x-show="!isAtBottom && chatItems.length"
+             x-transition
+             class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
+          <button @click="scrollToBottom()"
+                  class="px-4 py-2 rounded-full bg-sky-600 text-white text-sm
+                         shadow-lg hover:bg-sky-700 transition
+                         flex items-center gap-1">
+            {{ ui.icon('arrow-down', 'w-3.5 h-3.5') }}
+            <span>最新へ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# モバイル下部固定バー #}
+    <div class="md:hidden fixed bottom-0 left-0 right-0 z-30
+                bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
+                border-t border-slate-200 dark:border-slate-700
+                px-4 py-2 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-3 text-xs text-slate-500 overflow-hidden">
+        <span class="inline-flex items-center gap-0.5">{{ ui.icon('chat-bubble', 'w-3 h-3') }} <span x-text="stats.utteranceCount">0</span></span>
+        <span class="inline-flex items-center gap-0.5">{{ ui.icon('chart-bar', 'w-3 h-3') }} <span x-text="stats.totalTokens.toLocaleString()">0</span></span>
+        <span class="inline-flex items-center gap-0.5">{{ ui.icon('flag', 'w-3 h-3') }} <span x-text="stats.convergence.toFixed(2)">0.00</span></span>
+      </div>
+      <button @click="confirmAbort()"
+              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs
+                     text-red-600 dark:text-red-400
+                     bg-red-50 dark:bg-red-900/20
+                     border border-red-200 dark:border-red-800
+                     hover:bg-red-100 dark:hover:bg-red-900/40 transition inline-flex items-center gap-1">
+        {{ ui.icon('stop-circle', 'w-3.5 h-3.5') }} 中断
+      </button>
+    </div>
+
+    {# Step 3 下部アクションバー (統一パターン: 左=戻る、右=進む) #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6
+                border-t border-slate-200 dark:border-slate-700 mt-6">
+      <button @click="advanceStep(2)"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl
+                     text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center justify-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>計画を修正</span>
+      </button>
+
+      <button @click="goToResults()"
+              :disabled="!resultReady"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl text-white font-medium
+                     bg-gradient-to-r from-teal-600 to-sky-600
+                     hover:from-teal-700 hover:to-sky-700
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition shadow-lg shadow-sky-200 dark:shadow-sky-900/50
+                     flex items-center justify-center gap-2">
+        <span x-show="resultReady" class="inline-flex items-center gap-1">
+          {{ ui.icon('document', 'w-4 h-4') }} 結果に進む
+        </span>
+        <span x-show="!resultReady" class="inline-flex items-center gap-1">
+          {{ ui.icon('film', 'w-4 h-4') }} 議論進行中...
+        </span>
+        <span x-show="resultReady" class="inline-flex">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+      </button>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 4: 結果表示
+     ============================================================ #}
+  <div x-show="step === 4" x-transition.opacity class="space-y-6">
+
+    {# 完了ヘッダー #}
+    <div class="text-center py-2">
+      <h2 class="text-2xl md:text-3xl font-bold inline-flex items-center gap-3
+                 bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-600
+                 bg-clip-text text-transparent">
+        <span class="text-cyan-500 not-italic">{{ ui.icon('sparkles', 'w-7 h-7') }}</span>
+        議論完了!
+      </h2>
+    </div>
+
+    {# 統計カード #}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="text-center p-4 rounded-xl
+                  bg-blue-50 dark:bg-blue-900/20
+                  border border-blue-200 dark:border-blue-800
+                  animate-count-up stagger-1">
+        <div class="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400"
+             x-text="formatTime(result?.statistics?.duration_sec || 0)">0:00</div>
+        <div class="text-xs text-slate-500 mt-1">所要時間</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-green-50 dark:bg-green-900/20
+                  border border-green-200 dark:border-green-800
+                  animate-count-up stagger-2">
+        <div class="text-2xl font-bold font-mono text-teal-600 dark:text-green-400"
+             x-text="result?.statistics?.total_utterances ?? '-'">0</div>
+        <div class="text-xs text-slate-500 mt-1">発言数</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-cyan-50 dark:bg-cyan-900/20
+                  border border-cyan-200 dark:border-cyan-800
+                  animate-count-up stagger-3">
+        <div class="text-2xl font-bold font-mono text-cyan-600 dark:text-cyan-400"
+             x-text="(result?.statistics?.total_tokens || 0).toLocaleString()">0</div>
+        <div class="text-xs text-slate-500 mt-1">トークン</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-amber-50 dark:bg-amber-900/20
+                  border border-amber-200 dark:border-amber-800
+                  animate-count-up stagger-4">
+        <div class="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400"
+             x-text="(result?.statistics?.final_convergence != null
+                       ? result.statistics.final_convergence.toFixed(2)
+                       : '-')">0.00</div>
+        <div class="text-xs text-slate-500 mt-1">収束度</div>
+      </div>
+    </div>
+
+    {# MVP カード #}
+    <template x-if="result?.mvp_agent">
+      <div class="p-4 rounded-xl
+                  bg-gradient-to-r from-yellow-50 to-amber-50
+                  dark:from-yellow-900/20 dark:to-amber-900/20
+                  border border-yellow-300 dark:border-yellow-700
+                  animate-scale-in">
+        <div class="flex items-center gap-3">
+          <span class="text-4xl" x-text="result.mvp_agent.emoji || '🏆'"></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs text-yellow-600 dark:text-yellow-400 font-medium inline-flex items-center gap-1">
+              {{ ui.icon('trophy', 'w-3.5 h-3.5') }} MVP
+            </div>
+            <div class="text-lg font-bold text-slate-800 dark:text-slate-200"
+                 x-text="result.mvp_agent.name"></div>
+            <div x-show="result.mvp_agent.specialty"
+                 class="text-sm text-slate-600 dark:text-slate-400"
+                 x-text="result.mvp_agent.specialty"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    {# 仮説テーブル (存在するときのみ) #}
+    <template x-if="result?.hypotheses && result.hypotheses.length">
+      <div x-data="{
+             get hypotheses() { return $root.result?.hypotheses || []; },
+             selectable: false,
+             selectedHypotheses: [],
+           }">
+        {% include "components/hypothesis_table.html" %}
+      </div>
+    </template>
+
+    {# タブ切替 #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl
+                border border-slate-200 dark:border-slate-700
+                shadow-sm overflow-hidden">
+      {# タブヘッダー #}
+      <div class="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+        <template x-for="tab in resultTabs" :key="tab.id">
+          <button @click="activeTab = tab.id"
+                  class="flex-1 min-w-max px-4 py-3 text-sm font-medium
+                         transition-colors border-b-2 whitespace-nowrap"
+                  :class="{
+                    'border-sky-600 text-sky-600 dark:text-sky-400 dark:border-sky-400 bg-sky-50/50 dark:bg-sky-900/10':
+                      activeTab === tab.id,
+                    'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300':
+                      activeTab !== tab.id,
+                  }"
+                  x-text="tab.label"></button>
+        </template>
+      </div>
+
+      {# タブコンテンツ #}
+      <div class="p-6 max-h-[600px] overflow-y-auto custom-scrollbar">
+        {# レポート #}
+        <div x-show="activeTab === 'report'"
+             class="prose-orchestra"
+             x-html="renderMarkdown(result?.files?.report || '')"></div>
+
+        {# 全会話 #}
+        <div x-show="activeTab === 'conversation'"
+             class="prose-orchestra"
+             x-html="renderMarkdown(result?.files?.conversation || '')"></div>
+
+        {# 評価 #}
+        <div x-show="activeTab === 'evaluation'">
+          {% include "components/evaluation.html" %}
+        </div>
+
+        {# 要約 #}
+        <div x-show="activeTab === 'summary'"
+             class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed"
+             x-text="result?.files?.summary || '(要約なし)'"></div>
+      </div>
+    </div>
+
+    {# アクションバー #}
+    <div class="flex flex-wrap items-center justify-center gap-3 pt-4">
+      {# 議論に戻る #}
+      <button @click="backToChat()"
+              class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>議論に戻る</span>
+      </button>
+
+      {# フォローアップ #}
+      <button @click="startFollowUp()"
+              class="px-6 py-3 rounded-xl text-sky-600 dark:text-sky-400
+                     bg-sky-50 dark:bg-sky-900/20
+                     border border-sky-200 dark:border-sky-800
+                     hover:bg-sky-100 dark:hover:bg-sky-900/40
+                     transition flex items-center gap-2">
+        {{ ui.icon('arrow-path', 'w-4 h-4') }}
+        <span>フォローアップ議論</span>
+      </button>
+
+      {# ダウンロード #}
+      <div x-data="{ downloadOpen: false }" class="relative">
+        <button @click="downloadOpen = !downloadOpen"
+                class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                       bg-slate-100 dark:bg-slate-700
+                       hover:bg-slate-200 dark:hover:bg-slate-600
+                       transition flex items-center gap-2">
+          {{ ui.icon('arrow-down', 'w-4 h-4') }}
+          <span>ダウンロード</span>
+          <span class="inline-flex">
+            <template x-if="downloadOpen">{{ ui.icon('chevron-up', 'w-3 h-3') }}</template>
+            <template x-if="!downloadOpen">{{ ui.icon('chevron-down', 'w-3 h-3') }}</template>
+          </span>
+        </button>
+
+        <div x-show="downloadOpen"
+             x-cloak
+             @click.away="downloadOpen = false"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 -translate-y-2"
+             class="absolute top-full mt-2 right-0 w-56
+                    bg-white dark:bg-slate-800 rounded-xl shadow-lg
+                    border border-slate-200 dark:border-slate-700
+                    overflow-hidden z-40">
+          <a :href="'/api/sessions/' + (result?.session_id || '') + '/download?file=report'"
+             class="block px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center gap-2">
+            {{ ui.icon('document', 'w-4 h-4') }} レポート (.md)
+          </a>
+          <a :href="'/api/sessions/' + (result?.session_id || '') + '/download?file=conversation'"
+             class="block px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center gap-2">
+            {{ ui.icon('chat-bubble', 'w-4 h-4') }} 全会話 (.md)
+          </a>
+          <a :href="'/api/sessions/' + (result?.session_id || '') + '/download?file=evaluation'"
+             class="block px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center gap-2">
+            {{ ui.icon('chart-bar', 'w-4 h-4') }} 評価 (.md)
+          </a>
+          <a :href="'/api/sessions/' + (result?.session_id || '') + '/download?file=summary'"
+             class="block px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center gap-2">
+            {{ ui.icon('clipboard-list', 'w-4 h-4') }} 要約 (.txt)
+          </a>
+          <div class="border-t border-slate-200 dark:border-slate-700"></div>
+          <a :href="'/api/sessions/' + (result?.session_id || '') + '/download?file=all'"
+             class="block px-4 py-2 text-sm font-medium inline-flex items-center gap-2
+                    text-sky-600 dark:text-sky-400
+                    hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            {{ ui.icon('cube', 'w-4 h-4') }} 全ファイル (.zip)
+          </a>
+        </div>
+      </div>
+
+      {# ホームへ #}
+      <a href="/"
+         class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                bg-slate-100 dark:bg-slate-700
+                hover:bg-slate-200 dark:hover:bg-slate-600
+                transition flex items-center gap-2">
+        {{ ui.icon('home', 'w-4 h-4') }}
+        <span>ホームへ</span>
+      </a>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+  /**
+   * Idea 議論ページの Alpine.js コンポーネント。
+   *
+   * Step 1 (テーマ入力) を実装。Step 2-4 は次フェーズで拡張予定。
+   */
+  function ideaPage() {
+    const STORAGE_KEY_PROMPT = 'idea:prompt';
+    const STORAGE_KEY_SETTINGS = 'idea:settings';
+    const DEFAULT_SETTINGS = {
+      plannerModel: 'gpt-4.1',
+      conductorModel: 'gpt-4.1',
+      synthModel: 'gpt-5.4',
+      timeLimit: 300,
+      maxAgents: 5,
+      expertise: 'intermediate',
+      followUpId: '',
+      // ユーザーが候補 AI をクリックして選択した role_id のリスト。
+      // 空なら指揮者に自動選定させる (一件でもあれば優先候補として使う)。
+      preferredRoleIds: [],
+    };
+
+    return {
+      // === ステップ ===
+      step: 1,
+      maxStepReached: 1,  // 到達済みの最大 step (step_indicator クリック遷移制御)
+      steps: [
+        { num: 1, label: '入力' },
+        { num: 2, label: '計画' },
+        { num: 3, label: '議論' },
+        { num: 4, label: '結果' },
+      ],
+
+      // === フォーム state ===
+      prompt: '',
+      settings: { ...DEFAULT_SETTINGS },
+
+      // === 選択肢定義 ===
+      expertiseLevels: [
+        { id: 'beginner', label: '初級', desc: '平易な表現で' },
+        { id: 'intermediate', label: '中級', desc: '研究者レベル' },
+        { id: 'expert', label: '上級', desc: '数式・引用含む' },
+      ],
+      defaultAgentEmojis: ['🧮', '🔬', '🤖', '📚', '😈', '🎯', '📐', '📝'],
+      // 全ロール (デフォルト + カスタム) を使用率降順で保持。loadRoles で埋める。
+      availableRoles: [],
+
+      // === ファイル添付 ===
+      attachedFiles: [],
+      isDragging: false,
+      MAX_FILES: 5,
+      ALLOWED_EXTENSIONS: ['.py', '.yaml', '.json', '.md', '.txt', '.csv'],
+      MAX_FILE_SIZE: 50000, // 50KB
+
+      // === フォローアップ ===
+      previousSessions: [],
+      followUpContext: null,
+      selectedHypotheses: [],
+
+      // === クォータ / ローディング ===
+      remainingQuota: 10000,
+      dailyQuota: 10000,
+      planLoading: false,
+      startLoading: false,
+
+      // === Step 2+ 用 ===
+      plan: null,          // 正規化済み plan (フロント表示用、plan_card に渡す)
+      rawPlan: null,       // バックエンドの OrchestraPlan (asdict) そのまま。SSE に送る入力
+      roleMap: {},         // role_id → {emoji, name, specialty} (loadRoles で取得)
+
+      // === Step 3: リアルタイム議論 ===
+      sse: null,
+      chatItems: [],       // { id, type, ... } の統合配列
+      utterances: [],
+      currentRound: 0,
+      totalRounds: 0,
+      currentPhase: '',
+      currentPattern: '',
+      participatingAgents: [],
+      agentStatuses: {},   // { role_id: 'speaking'|'waiting'|'done' }
+      stats: { utteranceCount: 0, totalTokens: 0, convergence: 0 },
+
+      // タイマー
+      remainingSec: 0,
+      timeLimit: 300,
+      timePressure: 'relaxed',
+      timerInterval: null,
+
+      // スクロール / タイピング
+      isAtBottom: true,
+      isAgentThinking: false,
+      thinkingAgent: null,
+
+      // === Step 4: 結果表示 ===
+      result: null,          // { session_id, files, chain, hypotheses, statistics, mvp_agent }
+      resultReady: false,    // true = Step 3 チャットに 「結果を見る」 ボタンを表示
+      activeTab: 'report',   // 'report' | 'conversation' | 'evaluation' | 'summary'
+      resultTabs: [
+        { id: 'report',       label: 'レポート' },
+        { id: 'conversation', label: '全会話' },
+        { id: 'evaluation',   label: '評価' },
+        { id: 'summary',      label: '要約' },
+      ],
+
+      // ================================================================
+      // Computed
+      // ================================================================
+
+      get isPromptValid() {
+        return this.prompt.length >= 5 && this.prompt.length <= 5000;
+      },
+
+      /** 推定リクエスト数 = ラウンド数(≒4) × 参加AI × 発言回数(≒1.5) */
+      get estimatedRequests() {
+        const rounds = Math.max(2, Math.min(5, Math.ceil(this.settings.timeLimit / 90)));
+        return Math.round(rounds * this.settings.maxAgents * 1.5) + 10;
+      },
+
+      /** フェーズ名 → バッジの Tailwind クラス */
+      get phaseColorClass() {
+        const map = {
+          diverge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+          deepen: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+          converge: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+        };
+        return map[this.currentPhase] ||
+               'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300';
+      },
+
+      // ================================================================
+      // Lifecycle
+      // ================================================================
+
+      async init() {
+        this.restoreFromStorage();
+
+        // URL query の follow_up / load を優先
+        const params = new URLSearchParams(window.location.search);
+        const followUpId = params.get('follow_up');
+        if (followUpId) {
+          this.settings.followUpId = followUpId;
+        }
+        const loadId = params.get('load');
+
+        // 非同期取得は並列
+        await Promise.all([
+          this.loadPreviousSessions(),
+          this.loadHealth(),
+          this.loadRoles(),
+        ]);
+
+        if (this.settings.followUpId) {
+          await this.loadFollowUpContext();
+        }
+
+        // 履歴 → 各ステップに復元 (roleMap 読み込み後に実行)
+        if (loadId) {
+          await this.loadFromSession(loadId);
+        }
+      },
+
+      /**
+       * 履歴セッションを各ステップに復元する。
+       *
+       * ``/api/sessions/{id}/restore`` から取得したデータで
+       * prompt / plan / chatItems / result を hydrate し、
+       * maxStepReached=4 にして全ステップに移動可能にする。
+       *
+       * @param {string} sessionId
+       */
+      async loadFromSession(sessionId) {
+        try {
+          const res = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + '/restore');
+          if (!res.ok) {
+            toast('セッション復元データの取得に失敗しました (' + res.status + ')', 'error');
+            return;
+          }
+          const data = await res.json();
+
+          // Step 1: プロンプト復元
+          if (data.prompt) this.prompt = data.prompt;
+
+          // Step 2: 計画復元
+          if (data.plan) {
+            this.rawPlan = data.plan;
+            this.plan = this.normalizePlan(data.plan, {});
+          }
+
+          // Step 3: チャット復元
+          const chat = Array.isArray(data.chat) ? data.chat : [];
+          // roleMap で emoji/name を補完
+          this.chatItems = chat.map((item) => {
+            if (item.type === 'utterance' && item.utterance) {
+              const rid = item.utterance.agent?.role_id || '';
+              const info = this.roleMap[rid] || {};
+              return {
+                ...item,
+                utterance: {
+                  ...item.utterance,
+                  agent: {
+                    role_id: rid,
+                    emoji: item.utterance.agent?.emoji || info.emoji || '🎭',
+                    name: item.utterance.agent?.name || info.name || rid,
+                  },
+                },
+              };
+            }
+            return item;
+          });
+
+          // Step 4: 結果復元
+          const result = data.result || {};
+          this.result = {
+            session_id: data.session_id,
+            files: {
+              report: result.report,
+              conversation: result.conversation,
+              evaluation: result.evaluation,
+              summary: result.summary,
+              vibe_prompt: result.vibe_prompt,
+            },
+            chain: [data.session_id],
+            hypotheses: null,
+            statistics: result.statistics || {},
+            mvp_agent: this._buildMvpAgent((result.statistics || {}).mvp),
+          };
+          this.resultReady = true;
+          this.activeTab = 'report';
+
+          // 全ステップ到達済みにして、任意ステップに戻れるようにする
+          this.maxStepReached = 4;
+          // 結果ステップを起点にする (ユーザーは step_indicator で自由に移動可能)
+          this.step = 4;
+
+          toast('セッションを復元しました。各ステップに戻って修正できます', 'success');
+        } catch (e) {
+          console.error('loadFromSession error:', e);
+          toast('セッション復元に失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      // ================================================================
+      // Persistence
+      // ================================================================
+
+      saveToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY_PROMPT, this.prompt);
+          localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
+        } catch (e) {
+          console.warn('localStorage save failed:', e);
+        }
+      },
+
+      restoreFromStorage() {
+        try {
+          const savedPrompt = localStorage.getItem(STORAGE_KEY_PROMPT);
+          if (savedPrompt) this.prompt = savedPrompt;
+
+          const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+          if (savedSettings) {
+            const parsed = JSON.parse(savedSettings);
+            this.settings = { ...DEFAULT_SETTINGS, ...parsed };
+          }
+        } catch (e) {
+          console.warn('localStorage restore failed:', e);
+        }
+      },
+
+      // ================================================================
+      // API
+      // ================================================================
+
+      async loadPreviousSessions() {
+        try {
+          const res = await fetch('/api/sessions/recent?limit=20&type=idea');
+          if (!res.ok) return;
+          const data = await res.json();
+          this.previousSessions = data.sessions || [];
+        } catch (e) {
+          console.warn('Failed to load previous sessions:', e);
+        }
+      },
+
+      async loadHealth() {
+        try {
+          const res = await fetch('/api/health');
+          if (!res.ok) return;
+          const data = await res.json();
+          if (typeof data.rate_limit_remaining === 'number') {
+            this.remainingQuota = data.rate_limit_remaining;
+          }
+          if (typeof data.rate_limit_daily === 'number') {
+            this.dailyQuota = data.rate_limit_daily;
+          }
+        } catch (e) {
+          console.warn('Failed to load health:', e);
+        }
+      },
+
+      async onFollowUpChanged() {
+        this.saveToStorage();
+        if (this.settings.followUpId) {
+          await this.loadFollowUpContext();
+        } else {
+          this.followUpContext = null;
+          this.selectedHypotheses = [];
+        }
+      },
+
+      async loadFollowUpContext() {
+        const id = this.settings.followUpId;
+        if (!id) {
+          this.followUpContext = null;
+          return;
+        }
+        try {
+          const res = await fetch('/api/sessions/' + encodeURIComponent(id) + '/content');
+          if (!res.ok) {
+            toast('フォローアップ元セッションの読み込みに失敗しました', 'warning');
+            this.followUpContext = null;
+            return;
+          }
+          this.followUpContext = await res.json();
+        } catch (e) {
+          console.warn('Failed to load follow-up context:', e);
+          this.followUpContext = null;
+        }
+      },
+
+      async submitPlan() {
+        if (!this.isPromptValid) return;
+        this.planLoading = true;
+        // 最大 120 秒でタイムアウト (LLM 応答が想定超に遅い場合)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120_000);
+        try {
+          const body = {
+            prompt: this.prompt,
+            planner_model: this.settings.plannerModel,
+            conductor_model: this.settings.conductorModel,
+            synth_model: this.settings.synthModel,
+            time_limit: this.settings.timeLimit,
+            max_agents: this.settings.maxAgents,
+            expertise: this.settings.expertise,
+            follow_up_id: this.settings.followUpId || null,
+            attached_files: this.attachedFiles.map((f) => f.name),
+            preferred_role_ids: Array.isArray(this.settings.preferredRoleIds)
+              ? this.settings.preferredRoleIds
+              : [],
+          };
+          const res = await fetch('/api/idea/plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const detail = err.detail || err.message || err.error || ('HTTP ' + res.status);
+            console.error('plan API error:', res.status, err);
+            toast('計画立案に失敗しました (' + res.status + '): ' + detail, 'error');
+            return;
+          }
+          const data = await res.json();
+          if (!data.plan) {
+            console.error('plan API returned no plan:', data);
+            toast('計画データが空でした。サーバログを確認してください', 'error');
+            return;
+          }
+          // Raw plan (backend 形式) を保持し、表示用には正規化したものを使う
+          this.rawPlan = data.plan;
+          this.plan = this.normalizePlan(data.plan, {
+            estimated_requests: data.estimated_requests,
+          });
+          if (typeof data.remaining_quota === 'number') {
+            this.remainingQuota = data.remaining_quota;
+          }
+          toast('計画立案が完了しました', 'success');
+          this.advanceStep(2);
+        } catch (e) {
+          console.error('submitPlan error:', e);
+          if (e.name === 'AbortError') {
+            toast('計画立案がタイムアウトしました (120秒超)。モデル設定またはネットワークを確認してください', 'error');
+          } else {
+            toast('計画立案に失敗しました: ' + e.message, 'error');
+          }
+        } finally {
+          clearTimeout(timeoutId);
+          this.planLoading = false;
+        }
+      },
+
+      /**
+       * 議論を開始する。
+       *
+       * OrchestraSSE で /api/idea/stream に接続し、全イベントを購読して
+       * chatItems / stats / timer を更新する。
+       */
+      async startDiscussion() {
+        if (!this.plan) return;
+        this.startLoading = true;
+
+        // Step 3 の state リセット
+        this.chatItems = [];
+        this.utterances = [];
+        this.stats = { utteranceCount: 0, totalTokens: 0, convergence: 0 };
+        this.currentRound = 0;
+        this.totalRounds = this.plan.rounds?.length || 0;
+        this.currentPhase = '';
+        this.currentPattern = '';
+        this.participatingAgents = this.plan.agents || [];
+        this.agentStatuses = {};
+        this.isAgentThinking = false;
+        this.thinkingAgent = null;
+        this.isAtBottom = true;
+
+        this.timeLimit = this.settings.timeLimit;
+        this.remainingSec = this.settings.timeLimit;
+        this.timePressure = 'relaxed';
+
+        this.advanceStep(3);
+        this.startTimer();
+
+        // SSE 接続 (グローバル OrchestraSSE クラス使用)
+        this.sse = new OrchestraSSE('/api/idea/stream');
+        this._registerSSEHandlers();
+
+        try {
+          await this.sse.start({
+            plan: this.rawPlan || this.plan,
+            prompt: this.prompt,
+            conductor_model: this.settings.conductorModel,
+            synth_model: this.settings.synthModel,
+            time_limit: this.settings.timeLimit,
+            expertise: this.settings.expertise,
+          });
+        } catch (e) {
+          console.error('SSE start error:', e);
+          toast('議論の開始に失敗しました: ' + e.message, 'error');
+          this.stopTimer();
+        } finally {
+          this.startLoading = false;
+        }
+      },
+
+      /** SSE ハンドラを登録する。 */
+      _registerSSEHandlers() {
+        const sse = this.sse;
+        if (!sse) return;
+
+        // ── Phase 2: 議論進行 ──
+        sse.on('round_start', (data) => {
+          this.currentRound = data.round;
+          const cfg = data.config || {};
+          this.currentPhase = cfg.phase || '';
+          this.currentPattern = cfg.pattern || '';
+          this.resetAgentStatuses();
+          this.addChatItem({
+            id: 'divider_' + data.round + '_' + Date.now(),
+            type: 'round_divider',
+            round: {
+              number: data.round,
+              topic: cfg.topic || cfg.goal || '',
+              pattern: cfg.pattern || '',
+            },
+          });
+          // 最初の発言者を thinking 状態に
+          const firstSpeaker = (cfg.speakers && cfg.speakers[0]) || null;
+          if (firstSpeaker) this._showThinking(firstSpeaker);
+        });
+
+        sse.on('utterance', (data) => {
+          this.isAgentThinking = false;
+          this.thinkingAgent = null;
+          this.utterances.push(data);
+          this.stats.utteranceCount++;
+          this.stats.totalTokens += Number(data.tokens || 0);
+          this.addChatItem({
+            id: 'utt_' + this.utterances.length + '_' + Date.now(),
+            type: 'utterance',
+            utterance: data,
+          });
+          const roleId = data.agent?.role_id;
+          if (roleId) this.updateAgentStatus(roleId, 'done');
+        });
+
+        sse.on('round_conclusion', (data) => {
+          this.isAgentThinking = false;
+          this.addChatItem({
+            id: 'conclusion_' + data.round + '_' + Date.now(),
+            type: 'conclusion',
+            conclusion: data,
+          });
+        });
+
+        sse.on('round_end', (data) => {
+          if (typeof data.convergence === 'number') {
+            this.stats.convergence = data.convergence;
+          }
+          this.resetAgentStatuses();
+        });
+
+        sse.on('convergence_check', (data) => {
+          if (typeof data.score === 'number') {
+            this.stats.convergence = data.score;
+          }
+        });
+
+        // ── 検知系 ──
+        sse.on('stagnation_detected', () => {
+          this.addChatItem({
+            id: 'sys_stag_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'bolt', message: '議論の方向転換を指示しました' },
+          });
+        });
+
+        sse.on('agreement_detected', (data) => {
+          this.addChatItem({
+            id: 'sys_agree_' + Date.now(),
+            type: 'system_event',
+            event: {
+              icon: '⚖️',
+              message: '同意過多を検知: 反対意見を要求' +
+                       (data.direction ? ' (' + data.direction + ')' : ''),
+            },
+          });
+        });
+
+        // ── 時間 ──
+        sse.on('time_pressure', (data) => {
+          if (typeof data.remaining_sec === 'number') {
+            this.remainingSec = data.remaining_sec;
+          }
+          if (data.pressure) {
+            this.timePressure = data.pressure;
+          }
+          if (data.pressure === 'critical') {
+            this.addChatItem({
+              id: 'sys_time_' + Date.now(),
+              type: 'system_event',
+              event: { icon: 'clock', message: '残り時間わずか — 議論を収束します' },
+            });
+          }
+        });
+
+        sse.on('progress', (data) => {
+          if (typeof data.remaining_sec === 'number') {
+            this.remainingSec = data.remaining_sec;
+            this.updateTimePressure();
+          }
+          if (typeof data.total_rounds === 'number' && data.total_rounds > 0) {
+            this.totalRounds = data.total_rounds;
+          }
+        });
+
+        // ── Phase 3: 統合 ──
+        sse.on('synthesis_start', () => {
+          this.stopTimer();
+          this.isAgentThinking = false;
+          this.addChatItem({
+            id: 'sys_synth_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'chart-bar', message: '統合・評価フェーズを開始...' },
+          });
+        });
+
+        sse.on('evaluation_progress', (data) => {
+          this.addChatItem({
+            id: 'sys_eval_' + Date.now(),
+            type: 'system_event',
+            event: {
+              icon: 'pencil-square',
+              message: '評価: ' + (data.step || '') +
+                       (data.agent ? ' — ' + data.agent : ''),
+            },
+          });
+        });
+
+        // ── 汎用フェーズ通知 (現バックエンドで使用) ──
+        sse.on('phase', (data) => {
+          this.addChatItem({
+            id: 'sys_phase_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'musical-note', message: data.name || 'フェーズ進行中' },
+          });
+        });
+
+        sse.on('discussion_start', () => {
+          this.addChatItem({
+            id: 'sys_start_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'film', message: '議論を開始します' },
+          });
+        });
+
+        // ── 完了 ──
+        sse.on('done', async (data) => {
+          this.stopTimer();
+          this.isAgentThinking = false;
+          this.startLoading = false;
+
+          if (!data.session_id) {
+            // バックエンドが session_id を返さない場合 (キャンセル等)
+            toast('議論が完了しましたが結果を取得できませんでした', 'warning');
+            return;
+          }
+          this.addChatItem({
+            id: 'sys_done_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'sparkles', message: '議論が完了しました' },
+          });
+          await this.loadResult(data.session_id, data.statistics);
+          this.resultReady = true;
+          toast('結果をロード完了。「結果を見る」ボタンで次へ進んでください', 'success');
+        });
+
+        sse.on('error', (data) => {
+          this.stopTimer();
+          this.isAgentThinking = false;
+          this.startLoading = false;
+          toast(data.message || 'エラーが発生しました', 'error');
+          if (data.recoverable === false) {
+            // 復旧不可: Step 1 に戻す (3秒後)
+            setTimeout(() => { this.step = 1; }, 3000);
+          }
+        });
+      },
+
+      // ================================================================
+      // Chat: スクロール / アイテム追加
+      // ================================================================
+
+      addChatItem(item) {
+        this.chatItems.push(item);
+        if (this.isAtBottom) {
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      scrollToBottom() {
+        const el = this.$refs.chatContainer;
+        if (!el) return;
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+        this.isAtBottom = true;
+      },
+
+      handleScroll() {
+        const el = this.$refs.chatContainer;
+        if (!el) return;
+        const threshold = 60;
+        this.isAtBottom =
+          (el.scrollHeight - el.scrollTop - el.clientHeight) < threshold;
+      },
+
+      _showThinking(roleId) {
+        const agent = this.participatingAgents.find((a) => a.role_id === roleId);
+        if (agent) {
+          this.thinkingAgent = agent;
+          this.isAgentThinking = true;
+          this.updateAgentStatus(roleId, 'speaking');
+        }
+      },
+
+      // ================================================================
+      // Timer
+      // ================================================================
+
+      startTimer() {
+        this.stopTimer();
+        this.timerInterval = setInterval(() => {
+          if (this.remainingSec > 0) {
+            this.remainingSec--;
+            this.updateTimePressure();
+          }
+        }, 1000);
+      },
+
+      stopTimer() {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+      },
+
+      updateTimePressure() {
+        const ratio = this.remainingSec / Math.max(1, this.timeLimit);
+        if (ratio > 0.6) this.timePressure = 'relaxed';
+        else if (ratio > 0.3) this.timePressure = 'moderate';
+        else if (ratio > 0.1) this.timePressure = 'urgent';
+        else this.timePressure = 'critical';
+      },
+
+      // ================================================================
+      // Agent status
+      // ================================================================
+
+      getAgentStatus(roleId) {
+        return this.agentStatuses[roleId] || 'waiting';
+      },
+
+      updateAgentStatus(roleId, status) {
+        this.agentStatuses = { ...this.agentStatuses, [roleId]: status };
+      },
+
+      resetAgentStatuses() {
+        const reset = {};
+        for (const a of this.participatingAgents) {
+          reset[a.role_id] = 'waiting';
+        }
+        this.agentStatuses = reset;
+      },
+
+      // ================================================================
+      // Abort
+      // ================================================================
+
+      confirmAbort() {
+        window.dispatchEvent(new CustomEvent('open-modal', {
+          detail: {
+            title: '議論を中断しますか?',
+            message: 'これまでの発言は保存されず、Step 1 に戻ります。',
+            action: () => this.doAbort(),
+            confirmLabel: '中断する',
+          },
+        }));
+      },
+
+      doAbort() {
+        if (this.sse) {
+          try { this.sse.abort(); } catch (e) { console.warn(e); }
+          this.sse = null;
+        }
+        this.stopTimer();
+        this.isAgentThinking = false;
+        toast('議論を中断しました', 'info');
+        this.step = 1;
+      },
+
+      // ================================================================
+      // Step 4: 結果表示
+      // ================================================================
+
+      /**
+       * セッション結果をロードして Step 4 に遷移する。
+       *
+       * `/api/sessions/{id}/content` と `/api/sessions/{id}` (meta) を
+       * 並列 fetch して統計・ファイル・仮説を merge する。
+       *
+       * @param {string} sessionId
+       * @param {object} [doneStatistics] SSE の done イベントに含まれる統計 (優先)
+       */
+      async loadResult(sessionId, doneStatistics) {
+        try {
+          const [contentRes, metaRes] = await Promise.all([
+            fetch('/api/sessions/' + encodeURIComponent(sessionId) + '/content'),
+            fetch('/api/sessions/' + encodeURIComponent(sessionId)),
+          ]);
+
+          if (!contentRes.ok) {
+            toast('結果ファイルの読み込みに失敗しました', 'error');
+            return;
+          }
+          const content = await contentRes.json();
+          const meta = metaRes.ok ? await metaRes.json() : {};
+
+          // doneStatistics が空でなければ優先、なければ meta.statistics
+          const stats = (doneStatistics && Object.keys(doneStatistics).length)
+            ? doneStatistics
+            : (meta.statistics || {});
+
+          this.result = {
+            session_id: sessionId,
+            files: content.files || {},
+            chain: content.chain || [],
+            hypotheses: content.hypotheses || null,
+            statistics: stats,
+            mvp_agent: this._buildMvpAgent(stats.mvp),
+          };
+          this.activeTab = 'report';
+          // ☆ 自動遷移しない。resultReady = true は done ハンドラ側でセットされる
+        } catch (e) {
+          console.error(e);
+          toast('結果の読み込みに失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      /** Step 3 → 4 の手動遷移 (「結果を見る」ボタン)。 */
+      goToResults() {
+        if (!this.result) {
+          toast('結果がまだロードされていません', 'warning');
+          return;
+        }
+        this.advanceStep(4);
+      },
+
+      /** Step 4 → 3 の戻る (チャットに戻る、データ保持)。 */
+      backToChat() {
+        this.step = 3;
+      },
+
+      /** step を進めると同時に maxStepReached も更新。 */
+      advanceStep(n) {
+        this.step = n;
+        if (n > this.maxStepReached) this.maxStepReached = n;
+      },
+
+      /** step_indicator クリックでの遷移 (データ保持)。 */
+      goToStep(n) {
+        if (n < 1 || n > this.maxStepReached) return;
+        this.step = n;
+      },
+
+      /**
+       * MVP エージェントの表示情報を組み立てる。
+       *
+       * @param {string|null} roleId
+       * @returns {object|null} { role_id, emoji, name, specialty } or null
+       */
+      _buildMvpAgent(roleId) {
+        if (!roleId) return null;
+        const info = this.roleMap[roleId] || {};
+        return {
+          role_id: roleId,
+          emoji: info.emoji || '🏆',
+          name: info.name || roleId,
+          specialty: info.specialty || '',
+        };
+      },
+
+      /**
+       * 現在のセッションをフォローアップして Step 1 に戻る。
+       *
+       * result.session_id を followUpId に設定し、prompt / plan / chat 状態を
+       * リセットする (settings は維持)。
+       */
+      startFollowUp() {
+        if (!this.result?.session_id) return;
+
+        // followUp 情報をセット (再度 loadFollowUpContext で内容取得)
+        this.settings.followUpId = this.result.session_id;
+        this.followUpContext = null;
+
+        // 入力・議論状態のリセット
+        this.prompt = '';
+        this.plan = null;
+        this.chatItems = [];
+        this.utterances = [];
+        this.stats = { utteranceCount: 0, totalTokens: 0, convergence: 0 };
+        this.attachedFiles = [];
+        this.selectedHypotheses = [];
+        this.result = null;
+
+        this.saveToStorage();
+        this.step = 1;
+
+        // フォローアップ情報を非同期取得 (UIには反映される)
+        this.loadFollowUpContext();
+
+        toast('フォローアップモードで Step 1 に戻りました', 'info');
+      },
+
+      /**
+       * 全ロールを取得して roleMap を構築する。
+       * (Step 2 の plan_card で emoji/name を補完するため)
+       */
+      async loadRoles() {
+        try {
+          const res = await fetch('/api/roles');
+          if (!res.ok) return;
+          const roles = await res.json();
+          const map = {};
+          for (const r of roles) {
+            map[r.id] = {
+              emoji: r.emoji || '🎭',
+              name: r.name || r.id,
+              specialty: r.specialty || '',
+            };
+          }
+          this.roleMap = map;
+          // カスタムロールも含む全ロールを使用率 (session_count) 降順で保持。
+          // Step 1 の「候補 AI」表示で使用し、候補の完全一覧を見せる。
+          this.availableRoles = roles.slice().sort((a, b) => {
+            const sa = a?.stats?.session_count ?? 0;
+            const sb = b?.stats?.session_count ?? 0;
+            if (sb !== sa) return sb - sa;
+            return (a.id || '').localeCompare(b.id || '');
+          });
+          // ロード後、消失した role_id が preferredRoleIds に残っていたら整理する。
+          this._cleanupPreferredRoleIds();
+        } catch (e) {
+          console.warn('Failed to load roles:', e);
+        }
+      },
+
+      // 候補 AI をクリックで選択 / 選択解除する。
+      // maxAgents を超えると自動で maxAgents を +1 (上限 8)。
+      togglePreferredRole(roleId) {
+        if (!roleId) return;
+        const MAX_CAP = 8;
+        const list = Array.isArray(this.settings.preferredRoleIds)
+          ? [...this.settings.preferredRoleIds]
+          : [];
+        const idx = list.indexOf(roleId);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+        } else {
+          if (list.length >= MAX_CAP) {
+            toast('選択できるのは最大 ' + MAX_CAP + ' 人までです', 'warning');
+            return;
+          }
+          list.push(roleId);
+          // 選択数が現在の maxAgents を超えたら、自動で maxAgents を上げる。
+          if (list.length > this.settings.maxAgents) {
+            this.settings.maxAgents = Math.min(list.length, MAX_CAP);
+          }
+        }
+        this.settings.preferredRoleIds = list;
+        this.saveToStorage();
+      },
+
+      // maxAgents スライダー変更時に、選択中の候補 AI 数と整合を取る。
+      // スライダーを減らして選択数を下回ったら、選択リストを末尾からトランケートする。
+      onMaxAgentsChange() {
+        const list = this.settings.preferredRoleIds || [];
+        if (list.length > this.settings.maxAgents) {
+          this.settings.preferredRoleIds = list.slice(0, this.settings.maxAgents);
+        }
+        this.saveToStorage();
+      },
+
+      // 選択済み優先ロールを全解除。
+      clearPreferredRoles() {
+        this.settings.preferredRoleIds = [];
+        this.saveToStorage();
+      },
+
+      // availableRoles に存在しない role_id を preferredRoleIds から除去する。
+      _cleanupPreferredRoleIds() {
+        const validIds = new Set(this.availableRoles.map(r => r.id));
+        const filtered = (this.settings.preferredRoleIds || [])
+          .filter(id => validIds.has(id));
+        if (filtered.length !== (this.settings.preferredRoleIds || []).length) {
+          this.settings.preferredRoleIds = filtered;
+          this.saveToStorage();
+        }
+      },
+
+      /**
+       * バックエンド `OrchestraPlan` (asdict 済) を plan_card 用の形式に正規化する。
+       *
+       * バックエンド:
+       *   { odsc: { objective, deliverable, success_criteria, convergence_threshold },
+       *     selected_agents: [{ role_id, model, level, reason, expected_contribution }],
+       *     discussion_plan: { round_config: [{ round, phase_name, speakers, pattern,
+       *                        level, time_budget_sec, goal }],
+       *                        total_estimated_time_sec, total_estimated_requests } }
+       *
+       * plan_card:
+       *   { odsc: { objective, deliverables, criteria, convergence_threshold },
+       *     agents: [{ role_id, emoji, name, specialty, reason }],
+       *     rounds: [{ number, phase, pattern, topic, leader, estimated_sec }],
+       *     estimated_total_sec, estimated_requests }
+       */
+      normalizePlan(raw, extras) {
+        if (!raw) return null;
+        extras = extras || {};
+        const roleMap = this.roleMap || {};
+        const odsc = raw.odsc || {};
+        const dp = raw.discussion_plan || {};
+        const roundCfg = dp.round_config || [];
+        const privInstr = raw.private_instructions || {};
+
+        const agents = (raw.selected_agents || []).map((a) => {
+          const info = roleMap[a.role_id] || {};
+          const inst = privInstr[a.role_id] || {};
+          return {
+            role_id: a.role_id,
+            emoji: info.emoji || '🎭',
+            name: info.name || a.role_id,
+            specialty: info.specialty || a.expected_contribution || '',
+            reason: a.reason || '',
+            // 指揮者からの個別指示 (「目的・役割・期待」の詳細)
+            expected_contribution: inst.expected_contribution
+              || a.expected_contribution || '',
+            focus_points: Array.isArray(inst.focus_points) ? inst.focus_points : [],
+            constraints: Array.isArray(inst.constraints) ? inst.constraints : [],
+            context_from_plan: inst.context_from_plan || '',
+          };
+        });
+
+        const rounds = roundCfg.map((r) => ({
+          number: r.round,
+          phase: r.phase_name || '',
+          pattern: r.pattern || 'one_shot',
+          topic: r.goal || '',
+          leader: (r.speakers && r.speakers[0]) || '',
+          estimated_sec: r.time_budget_sec || 0,
+        }));
+
+        return {
+          odsc: {
+            objective: odsc.objective || '',
+            deliverables: odsc.deliverable || '',
+            criteria: odsc.success_criteria || '',
+            convergence_threshold: odsc.convergence_threshold,
+          },
+          agents: agents,
+          rounds: rounds,
+          estimated_total_sec: dp.total_estimated_time_sec || 0,
+          estimated_requests: extras.estimated_requests
+            || dp.total_estimated_requests || 0,
+        };
+      },
+
+      // ================================================================
+      // File drop / select
+      // ================================================================
+
+      handleDrop(event) {
+        this.isDragging = false;
+        const files = Array.from(event.dataTransfer.files || []);
+        this.addFiles(files);
+      },
+
+      handleFileSelect(event) {
+        const files = Array.from(event.target.files || []);
+        this.addFiles(files);
+        event.target.value = '';
+      },
+
+      async addFiles(files) {
+        for (const file of files) {
+          if (this.attachedFiles.length >= this.MAX_FILES) {
+            toast('最大ファイル数に達しています', 'warning');
+            break;
+          }
+          const ext = '.' + file.name.split('.').pop().toLowerCase();
+          if (!this.ALLOWED_EXTENSIONS.includes(ext)) {
+            toast('非対応の拡張子: ' + ext, 'warning');
+            continue;
+          }
+          if (file.size > this.MAX_FILE_SIZE) {
+            toast('ファイルサイズ超過: ' + file.name, 'warning');
+            continue;
+          }
+          try {
+            const content = await file.text();
+            this.attachedFiles.push({
+              name: file.name,
+              size: file.size,
+              content: content.slice(0, 10000),
+            });
+          } catch (e) {
+            toast('ファイル読み込み失敗: ' + file.name, 'error');
+          }
+        }
+      },
+
+      removeFile(index) {
+        this.attachedFiles.splice(index, 1);
+      },
+
+      formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        return (bytes / 1024).toFixed(1) + ' KB';
+      },
+
+      // ================================================================
+      // Helpers
+      // ================================================================
+
+      sessionOptionLabel(s) {
+        const date = (s.completed_at || s.created_at || '').slice(0, 16).replace('T', ' ');
+        const theme = (s.user_prompt_preview || '').slice(0, 40);
+        return date + ' — ' + theme;
+      },
+    };
+  }
+</script>
+{% endblock %}

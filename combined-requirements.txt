@@ -1,0 +1,37 @@
+# Combined requirements (generated)
+# Source: exhibit, web_search, Orchestra, RAG
+fastapi>=0.104.0
+uvicorn>=0.24.0  # standard extras skipped due httptools build issues on win-arm64
+python-dotenv>=1.0.0
+# google-cloud-aiplatform>=1.60.0  # skipped due grpcio build issues on win-arm64
+pydantic>=2.5.0
+jinja2>=3.1.0
+aiofiles>=23.2.0
+python-multipart>=0.0.6
+sse-starlette>=1.8.0
+
+# Core libraries
+openai>=1.30.0
+requests>=2.31.0
+pyyaml>=6.0
+typer>=0.9.0
+rich>=13.0.0
+
+# RAG / data
+neo4j>=5.0
+pandas>=2.0
+networkx>=3.0
+matplotlib>=3.7
+pyvis>=0.3.2
+graphviz>=0.20
+Pillow>=10.0
+tqdm>=4.65
+seaborn>=0.12
+# tiktoken>=0.5  # skipped due Rust/Rust build and win-arm64 wheel issues
+
+# Dev / testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+ruff>=0.1.0

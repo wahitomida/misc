@@ -1,0 +1,45 @@
+scenario_id: algorithm_design
+display_name: "アルゴリズム設計"
+description: "新しいアルゴリズムや手法の設計を議論する"
+
+suggested_flow:
+  - phase: "問題の定式化"
+    description: "入出力の数学的定義、制約条件の明確化"
+    recommended_speakers: ["theorist", "literature"]
+    pattern: "one_shot"
+    level: "medium"
+
+  - phase: "先行研究の整理"
+    description: "既存手法の長短、SOTAとの差分"
+    recommended_speakers: ["literature", "implementer"]
+    pattern: "one_shot"
+    level: "medium"
+
+  - phase: "提案手法の穴探し"
+    description: "前提の検証、反例の構築、限界の特定"
+    recommended_speakers: ["devil", "theorist"]
+    pattern: "ping_pong"
+    level: "medium"
+
+  - phase: "統合・設計決定"
+    description: "全視点を統合して手法の骨格を固める"
+    recommended_speakers: ["all"]
+    pattern: "free_talk"
+    level: "high"
+
+  - phase: "実験計画"
+    description: "検証方法、ベースライン、データセットの設計"
+    recommended_speakers: ["experimentalist", "implementer"]
+    pattern: "one_shot"
+    level: "medium"
+
+recommended_agents:
+  must_have: ["theorist", "devil"]
+  nice_to_have: ["literature", "experimentalist", "implementer"]
+  optional: ["bird_eye"]
+
+deliverable_format: "提案手法の骨格 + 実験計画"
+
+odsc_hint:
+  objective_template: "{topic}における最適な設計選択を技術的に評価する"
+  success_criteria_template: "手法の骨格が合意され、検証すべき仮説が3つ以上明確になっていること"

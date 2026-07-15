@@ -1,0 +1,45 @@
+scenario_id: experiment_planning
+display_name: "実験計画"
+description: "実験の設計・条件設定・ベースライン選定を議論する"
+
+suggested_flow:
+  - phase: "実験目的の明確化"
+    description: "何を検証するのか、仮説の整理"
+    recommended_speakers: ["experimentalist", "theorist"]
+    pattern: "one_shot"
+    level: "medium"
+
+  - phase: "条件設計"
+    description: "比較条件、ablation条件、データセット選定"
+    recommended_speakers: ["experimentalist", "literature"]
+    pattern: "ping_pong"
+    level: "medium"
+
+  - phase: "実装・リソース確認"
+    description: "計算リソース、実装可能性、所要時間の見積もり"
+    recommended_speakers: ["implementer", "experimentalist"]
+    pattern: "ping_pong"
+    level: "medium"
+
+  - phase: "穴探し・リスク確認"
+    description: "実験設計の穴、統計的妥当性、再現性リスク"
+    recommended_speakers: ["devil", "experimentalist"]
+    pattern: "ping_pong"
+    level: "medium"
+
+  - phase: "最終確認"
+    description: "実験計画書としてのまとめ"
+    recommended_speakers: ["all"]
+    pattern: "one_shot"
+    level: "low"
+
+recommended_agents:
+  must_have: ["experimentalist", "implementer"]
+  nice_to_have: ["theorist", "devil", "literature"]
+  optional: ["bird_eye"]
+
+deliverable_format: "実験設計書（条件、データ、指標、リソース、再現性チェックリスト）"
+
+odsc_hint:
+  objective_template: "{topic}を検証するための再現可能な実験計画を設計する"
+  success_criteria_template: "比較条件、評価指標、計算リソースが具体的に定まっていること"

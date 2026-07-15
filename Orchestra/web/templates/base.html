@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja" class="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AI Orchestra{% endblock %}</title>
+
+  <!-- ダークモード即時適用 (白フラッシュ防止) -->
+  <script>
+    (function() {
+      try {
+        const stored = localStorage.getItem('darkMode');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (stored === 'true' || (stored === null && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary:   { DEFAULT: '#0EA5E9', hover: '#0284C7', light: '#F0F9FF' },
+            secondary: '#06B6D4',
+            surface:   { light: '#FFFFFF', dark: '#1A1D27' },
+            bg:        { light: '#FAFBFC', dark: '#0F1117' },
+          },
+          fontFamily: {
+            sans: ['Inter', '"Noto Sans JP"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          maxWidth: { '8xl': '1440px' },
+          animation: {
+            'fade-in':    'fadeIn 300ms ease-out',
+            'slide-up':   'slideUp 400ms ease-out',
+            'pulse-slow': 'pulse 3s infinite',
+          },
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js (defer) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Marked + DOMPurify -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-favicon.svg">
+
+  <!-- Custom CSS (cache-buster v3) -->
+  <link rel="stylesheet" href="/static/css/custom.css?v=3">
+
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body class="bg-bg-light dark:bg-bg-dark text-slate-800 dark:text-slate-200
+             font-sans min-h-screen transition-colors duration-200">
+
+  <!-- Header -->
+  {% include "partials/header.html" %}
+
+  <!-- Main Content -->
+  <main class="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-12">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Toast Container -->
+  {% include "partials/toast.html" %}
+
+  <!-- Modal Container -->
+  {% include "partials/modal.html" %}
+
+  <!-- Custom JS -->
+  <script src="/static/js/dark-mode.js"></script>
+  <script src="/static/js/markdown.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/app.js"></script>
+
+  {% block scripts_extra %}{% endblock %}
+</body>
+</html>

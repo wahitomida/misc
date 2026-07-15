@@ -1,0 +1,300 @@
+{# 計画カード
+   設計書: doc/ui/03_components.md §3
+
+   親スコープ (Alpine.js) に以下が必要:
+     - plan: {
+         odsc: { objective, deliverables, criteria, convergence_threshold },
+         agents: [{ role_id, emoji, name, specialty, reason }],
+         rounds: [{ number, phase, pattern, topic, leader, estimated_sec }],
+         estimated_total_sec, estimated_requests
+       }
+     - remainingQuota: number
+     - formatTime(sec): 関数 (app.js グローバル)
+#}
+{% import "components/icon.html" as ui %}
+<div class="space-y-6" x-show="plan">
+
+  {# ============================================================
+     ODSC セクション
+     ============================================================ #}
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+               text-slate-800 dark:text-slate-200">
+      <span class="text-sky-500">{{ ui.icon('clipboard-list', 'w-5 h-5') }}</span> 議論の枠組み (ODSC)
+    </h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-blue-500">{{ ui.icon('flag', 'w-4 h-4') }}</span>
+          <span class="text-xs font-bold text-blue-700 dark:text-blue-300">Objective</span>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
+           x-text="plan?.odsc?.objective || '—'"></p>
+      </div>
+
+      <div class="p-3 rounded-xl bg-green-50 dark:bg-green-900/20">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-green-500">{{ ui.icon('cube', 'w-4 h-4') }}</span>
+          <span class="text-xs font-bold text-green-700 dark:text-green-300">Deliverables</span>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
+           x-text="plan?.odsc?.deliverables || '—'"></p>
+      </div>
+
+      <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-amber-500">{{ ui.icon('check-circle', 'w-4 h-4') }}</span>
+          <span class="text-xs font-bold text-amber-700 dark:text-amber-300">Criteria</span>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
+           x-text="plan?.odsc?.criteria || '—'"></p>
+      </div>
+
+      <div class="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/20">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-cyan-500">{{ ui.icon('adjustments', 'w-4 h-4') }}</span>
+          <span class="text-xs font-bold text-cyan-700 dark:text-cyan-300">Convergence Threshold</span>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300"
+           x-text="plan?.odsc?.convergence_threshold != null
+                   ? (plan.odsc.convergence_threshold.toFixed(2) + ' (この値以上で早期収束)')
+                   : '—'"></p>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     参加AI セクション
+     ============================================================ #}
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+               text-slate-800 dark:text-slate-200">
+      <span class="text-sky-500">{{ ui.icon('user-group', 'w-5 h-5') }}</span> 参加AI
+      <span class="text-sm font-normal text-slate-400"
+            x-text="'(' + (plan?.agents?.length || 0) + '名)'"></span>
+    </h3>
+
+    <div class="flex flex-wrap gap-3">
+      <template x-for="agent in plan?.agents || []" :key="agent.role_id">
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl
+                    bg-slate-100 dark:bg-slate-700
+                    hover:bg-sky-50 dark:hover:bg-sky-900/30
+                    transition cursor-default"
+             :title="agent.specialty || agent.reason || ''">
+          <span class="text-xl" x-text="agent.emoji || '🎭'"></span>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                x-text="agent.name || agent.role_id"></span>
+        </div>
+      </template>
+    </div>
+
+    <template x-if="!plan?.agents?.length">
+      <p class="text-sm text-slate-400">エージェント情報がありません</p>
+    </template>
+  </div>
+
+  {# ============================================================
+     指揮者からの目的・役割・期待
+     (各エージェントの private_instruction を可視化)
+     ============================================================ #}
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm"
+       x-show="(plan?.agents || []).some(a => a.expected_contribution || a.focus_points?.length || a.reason)">
+    <h3 class="text-lg font-bold mb-1 flex items-center gap-2
+               text-slate-800 dark:text-slate-200">
+      <span class="text-sky-500">{{ ui.icon('musical-note', 'w-5 h-5') }}</span> 指揮者から各AIへの「目的・役割・期待」
+    </h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+      Phase 1 で指揮者が各参加AIに個別に伝える指示。議論中は各AIがこれを踏まえて発言します。
+    </p>
+
+    <div class="space-y-4">
+      <template x-for="agent in plan?.agents || []" :key="agent.role_id + '_instr'">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700
+                    bg-slate-50/60 dark:bg-slate-900/40 p-4">
+          {# ヘッダー: エージェント名 + 起用理由 #}
+          <div class="flex items-start gap-3 mb-3">
+            <span class="text-2xl leading-none" x-text="agent.emoji || '🎭'"></span>
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-slate-800 dark:text-slate-200 mb-0.5"
+                   x-text="agent.name || agent.role_id"></div>
+              <div class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed"
+                   x-show="agent.reason">
+                <span class="text-slate-400">起用理由:</span>
+                <span x-text="agent.reason"></span>
+              </div>
+            </div>
+          </div>
+
+          {# 期待される貢献 #}
+          <div x-show="agent.expected_contribution"
+               class="mb-2 flex items-start gap-2">
+            <span class="mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium
+                         bg-sky-100 text-sky-700
+                         dark:bg-sky-900/50 dark:text-sky-300 whitespace-nowrap
+                         inline-flex items-center gap-1">
+              {{ ui.icon('flag', 'w-3 h-3') }} 期待
+            </span>
+            <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed flex-1"
+               x-text="agent.expected_contribution"></p>
+          </div>
+
+          {# 議論上の位置づけ (context_from_plan) #}
+          <div x-show="agent.context_from_plan"
+               class="mb-2 flex items-start gap-2">
+            <span class="mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium
+                         bg-cyan-100 text-cyan-700
+                         dark:bg-cyan-900/50 dark:text-cyan-300 whitespace-nowrap
+                         inline-flex items-center gap-1">
+              {{ ui.icon('musical-note', 'w-3 h-3') }} 役割
+            </span>
+            <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed flex-1"
+               x-text="agent.context_from_plan"></p>
+          </div>
+
+          {# 注目観点 (focus_points) #}
+          <div x-show="agent.focus_points && agent.focus_points.length"
+               class="mb-2 flex items-start gap-2">
+            <span class="mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium
+                         bg-amber-100 text-amber-700
+                         dark:bg-amber-900/50 dark:text-amber-300 whitespace-nowrap
+                         inline-flex items-center gap-1">
+              {{ ui.icon('magnifying-glass', 'w-3 h-3') }} 注目
+            </span>
+            <ul class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed flex-1
+                       list-disc list-inside space-y-0.5">
+              <template x-for="(fp, idx) in agent.focus_points || []" :key="idx">
+                <li x-text="fp"></li>
+              </template>
+            </ul>
+          </div>
+
+          {# 制約 (constraints) #}
+          <div x-show="agent.constraints && agent.constraints.length"
+               class="flex items-start gap-2">
+            <span class="mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium
+                         bg-rose-100 text-rose-700
+                         dark:bg-rose-900/50 dark:text-rose-300 whitespace-nowrap
+                         inline-flex items-center gap-1">
+              {{ ui.icon('exclamation-triangle', 'w-3 h-3') }} 制約
+            </span>
+            <ul class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed flex-1
+                       list-disc list-inside space-y-0.5">
+              <template x-for="(c, idx) in agent.constraints || []" :key="idx">
+                <li x-text="c"></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  {# ============================================================
+     ラウンド計画 セクション
+     ============================================================ #}
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+              border border-slate-200 dark:border-slate-700 shadow-sm">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+               text-slate-800 dark:text-slate-200">
+      <span class="text-sky-500">{{ ui.icon('calendar', 'w-5 h-5') }}</span> ラウンド計画
+      <span class="text-sm font-normal text-slate-400"
+            x-text="'(' + (plan?.rounds?.length || 0) + 'ラウンド)'"></span>
+    </h3>
+
+    <div class="space-y-3">
+      <template x-for="round in plan?.rounds || []" :key="round.number">
+        <div class="flex items-start gap-4 p-3 rounded-xl
+                    bg-slate-50 dark:bg-slate-700/50">
+          {# ラウンド番号 #}
+          <div class="w-8 h-8 flex-shrink-0 rounded-full
+                      bg-sky-100 dark:bg-sky-900/50
+                      flex items-center justify-center
+                      text-sm font-bold text-sky-600 dark:text-sky-400">
+            <span x-text="round.number"></span>
+          </div>
+
+          {# 情報 #}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              {# フェーズバッジ #}
+              <template x-if="round.phase">
+                <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                      :class="{
+                        'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300':
+                          round.phase === 'diverge',
+                        'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300':
+                          round.phase === 'deepen',
+                        'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300':
+                          round.phase === 'converge',
+                        'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300':
+                          !['diverge','deepen','converge'].includes(round.phase),
+                      }"
+                      x-text="round.phase"></span>
+              </template>
+
+              {# パターンバッジ #}
+              <span class="text-xs px-2 py-0.5 rounded
+                           bg-slate-200 dark:bg-slate-600
+                           text-slate-600 dark:text-slate-300 font-mono"
+                    x-text="round.pattern || 'one_shot'"></span>
+            </div>
+
+            {# トピック (goal) #}
+            <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
+               x-text="round.topic || '(トピック未設定)'"></p>
+
+            {# 主導者 #}
+            <div class="text-xs text-slate-400 mt-1"
+                 x-show="round.leader">
+              主導: <span x-text="round.leader"></span>
+            </div>
+          </div>
+
+          {# 見積時間 #}
+          <div class="text-sm font-mono text-slate-500 dark:text-slate-400 flex-shrink-0"
+               x-show="round.estimated_sec">
+            <span x-text="formatTime(round.estimated_sec)"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <template x-if="!plan?.rounds?.length">
+      <p class="text-sm text-slate-400">ラウンド情報がありません</p>
+    </template>
+  </div>
+
+  {# ============================================================
+     リソース見積 セクション
+     ============================================================ #}
+  <div class="flex flex-wrap gap-4">
+    <div class="flex items-center gap-2 px-4 py-2 rounded-xl
+                bg-blue-50 dark:bg-blue-900/20 text-sm">
+      <span class="text-blue-600">{{ ui.icon('clock', 'w-4 h-4') }}</span>
+      <span class="text-slate-600 dark:text-slate-400">予想時間:</span>
+      <span class="font-medium text-blue-700 dark:text-blue-300"
+            x-text="formatTime(plan?.estimated_total_sec || 0)"></span>
+    </div>
+
+    <div class="flex items-center gap-2 px-4 py-2 rounded-xl
+                bg-green-50 dark:bg-green-900/20 text-sm">
+      <span class="text-green-600">{{ ui.icon('chart-bar', 'w-4 h-4') }}</span>
+      <span class="text-slate-600 dark:text-slate-400">API見積:</span>
+      <span class="font-medium text-green-700 dark:text-green-300"
+            x-text="'約' + (plan?.estimated_requests || 0) + 'リクエスト'"></span>
+    </div>
+
+    <div class="flex items-center gap-2 px-4 py-2 rounded-xl
+                bg-slate-100 dark:bg-slate-700 text-sm">
+      <span class="text-slate-500">{{ ui.icon('cube', 'w-4 h-4') }}</span>
+      <span class="text-slate-600 dark:text-slate-400">残り:</span>
+      <span class="font-medium text-slate-700 dark:text-slate-300"
+            x-text="(remainingQuota || 0).toLocaleString()"></span>
+    </div>
+  </div>
+
+</div>

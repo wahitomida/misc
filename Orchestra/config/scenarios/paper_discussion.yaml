@@ -1,0 +1,39 @@
+scenario_id: paper_discussion
+display_name: "論文議論"
+description: "論文の手法を理解し、応用可能性や限界を議論する"
+
+suggested_flow:
+  - phase: "手法の整理"
+    description: "論文の核心アイデアの要約と位置づけ"
+    recommended_speakers: ["literature", "theorist"]
+    pattern: "one_shot"
+    level: "medium"
+
+  - phase: "強みの分析"
+    description: "なぜこの手法が機能するか、理論的根拠"
+    recommended_speakers: ["theorist", "implementer"]
+    pattern: "one_shot"
+    level: "medium"
+
+  - phase: "限界と弱点"
+    description: "手法が破綻するケース、仮定の脆さ"
+    recommended_speakers: ["devil", "experimentalist"]
+    pattern: "ping_pong"
+    level: "high"
+
+  - phase: "応用可能性"
+    description: "自分の研究への適用、拡張の方向性"
+    recommended_speakers: ["all"]
+    pattern: "free_talk"
+    level: "high"
+
+recommended_agents:
+  must_have: ["literature", "devil"]
+  nice_to_have: ["theorist", "experimentalist", "implementer"]
+  optional: ["bird_eye"]
+
+deliverable_format: "技術的洞察一覧 + 応用アイデア + 限界の明確化"
+
+odsc_hint:
+  objective_template: "{topic}の技術的本質を理解し、応用可能性と限界を評価する"
+  success_criteria_template: "手法の強み・弱みが明確で、自研究への具体的な応用案が1つ以上出ていること"

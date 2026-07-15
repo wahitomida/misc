@@ -1,0 +1,40 @@
+{# エージェントバッジ (medium サイズ、ステータス付き)
+   設計書: doc/ui/03_components.md §8
+
+   親スコープに必要:
+     - agent: { role_id, emoji, name, specialty }
+     - status: 'speaking' | 'waiting' | 'done' | null
+#}
+<div class="flex items-center gap-2 px-2 py-1.5 rounded-lg
+            bg-slate-100 dark:bg-slate-700"
+     :title="agent.specialty || ''">
+
+  {# ステータスインジケーター付きアバター #}
+  <div class="relative flex-shrink-0">
+    <span class="text-lg" x-text="agent.emoji || '🎭'"></span>
+
+    {# 発言中: 緑パルス #}
+    <template x-if="status === 'speaking'">
+      <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5
+                   bg-teal-500 rounded-full animate-pulse
+                   border-2 border-white dark:border-slate-700"></span>
+    </template>
+
+    {# 完了: 青チェック #}
+    <template x-if="status === 'done'">
+      <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5
+                   bg-blue-500 rounded-full
+                   border-2 border-white dark:border-slate-700"></span>
+    </template>
+  </div>
+
+  <div class="min-w-0 flex-1">
+    <div class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate"
+         x-text="agent.name || agent.role_id"></div>
+    <div class="text-xs text-slate-400"
+         x-show="status"
+         x-text="status === 'speaking' ? '発言中...' :
+                 status === 'done' ? '発言済' :
+                 status === 'waiting' ? '待機中' : ''"></div>
+  </div>
+</div>

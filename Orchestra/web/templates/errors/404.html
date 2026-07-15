@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}404 - ページが見つかりません{% endblock %}
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh] text-center"
+     role="alert">
+  <img src="/static/img/logo.svg"
+       class="w-24 h-24 mb-6 opacity-80"
+       alt="AI Orchestra" aria-hidden="true">
+  <h1 class="text-4xl md:text-5xl font-bold mb-2 text-slate-800 dark:text-slate-200">404</h1>
+  <p class="text-slate-500 dark:text-slate-400 mb-6">
+    お探しのページは見つかりませんでした
+  </p>
+  <a href="/" class="px-6 py-3 bg-sky-600 text-white rounded-xl
+                     hover:bg-sky-700 transition focus-ring">
+    ホームに戻る
+  </a>
+</div>
+{% endblock %}

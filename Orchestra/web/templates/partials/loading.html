@@ -1,0 +1,29 @@
+{# ローディング表示 (フルスクリーンオーバーレイ)
+   設計書: doc/ui/03_components.md §11.2
+
+   使用方法 (ページ側):
+     x-data="{ loading: false, loadingMessage: '' }"
+     {% include "partials/loading.html" %}
+#}
+<template x-if="loading">
+  <div class="fixed inset-0 z-50 flex items-center justify-center
+              bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
+       role="status"
+       aria-live="polite"
+       aria-busy="true">
+    <div class="text-center">
+      <div class="inline-flex items-center gap-3 px-6 py-4 rounded-2xl
+                  bg-white dark:bg-slate-800 shadow-xl
+                  border border-slate-200 dark:border-slate-700">
+        <svg class="animate-spin h-5 w-5 text-sky-600" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10"
+                  stroke="currentColor" stroke-width="4" fill="none"></circle>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-300"
+              x-text="loadingMessage || '読み込み中...'"></span>
+      </div>
+    </div>
+  </div>
+</template>

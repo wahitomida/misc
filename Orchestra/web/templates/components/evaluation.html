@@ -1,0 +1,98 @@
+{# 評価表示コンポーネント
+   設計書: doc/ui/03_components.md §5
+
+   親スコープに必要:
+     - result: { files: { evaluation }, evaluation? (structured, optional) }
+       - result.evaluation が構造化データ (mvp / overall_quality / agent_scores / odsc_achievement)
+         を持てば構造化表示、なければ Markdown フォールバック
+     - renderMarkdown(md) (グローバル関数、markdown.js 提供)
+#}
+
+{# ─────────────── 構造化データがある場合 ─────────────── #}
+<template x-if="result?.evaluation">
+  <div class="space-y-6">
+
+    {# 全体品質 #}
+    <div class="flex items-center gap-4"
+         x-show="result.evaluation.overall_quality != null">
+      <span class="text-sm font-medium text-slate-600 dark:text-slate-400">全体品質:</span>
+      <div class="flex items-center gap-1">
+        <template x-for="i in 5" :key="i">
+          <span class="text-lg"
+                :class="i <= (result.evaluation.overall_quality || 0)
+                        ? 'opacity-100' : 'opacity-30'">⭐</span>
+        </template>
+      </div>
+      <span class="text-sm text-slate-500"
+            x-text="(result.evaluation.overall_quality || 0) + '/5'"></span>
+    </div>
+
+    {# ODSC 達成度バー #}
+    <div x-show="result.evaluation.odsc_achievement != null">
+      <div class="flex justify-between text-sm mb-1">
+        <span class="text-slate-600 dark:text-slate-400">ODSC達成度</span>
+        <span class="font-medium"
+              x-text="Math.round((result.evaluation.odsc_achievement || 0) * 100) + '%'"></span>
+      </div>
+      <div class="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-sky-400 to-sky-600 rounded-full
+                    transition-all duration-500"
+             :style="'width: ' + ((result.evaluation.odsc_achievement || 0) * 100) + '%'">
+        </div>
+      </div>
+    </div>
+
+    {# 各AI スコアテーブル #}
+    <div class="overflow-x-auto"
+         x-show="(result.evaluation.agent_scores || []).length">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500 dark:text-slate-400 border-b
+                     border-slate-200 dark:border-slate-700">
+            <th class="pb-2">AI</th>
+            <th class="pb-2 text-center">自己評価</th>
+            <th class="pb-2 text-center">他者評価</th>
+            <th class="pb-2 text-center">総合</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="agent in result.evaluation.agent_scores" :key="agent.role_id">
+            <tr class="border-b border-slate-100 dark:border-slate-800">
+              <td class="py-2">
+                <div class="flex items-center gap-2">
+                  <span x-text="agent.emoji || '🎭'"></span>
+                  <span x-text="agent.name || agent.role_id"></span>
+                </div>
+              </td>
+              <td class="py-2 text-center">
+                <span class="font-mono"
+                      x-text="(agent.self_avg || 0).toFixed(1)"></span>
+              </td>
+              <td class="py-2 text-center">
+                <span class="font-mono"
+                      x-text="(agent.peer_avg || 0).toFixed(1)"></span>
+              </td>
+              <td class="py-2 text-center">
+                <span class="font-mono font-bold"
+                      x-text="(((agent.self_avg || 0) + (agent.peer_avg || 0)) / 2).toFixed(1)"></span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+{# ─────────────── 構造化データがない場合: Markdown ─────────────── #}
+<template x-if="!result?.evaluation && result?.files?.evaluation">
+  <div class="prose-orchestra"
+       x-html="renderMarkdown(result.files.evaluation)"></div>
+</template>
+
+{# ─────────────── どちらもない ─────────────── #}
+<template x-if="!result?.evaluation && !result?.files?.evaluation">
+  <div class="text-center text-sm text-slate-400 py-8">
+    評価データがありません
+  </div>
+</template>

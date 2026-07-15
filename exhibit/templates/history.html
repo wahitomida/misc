@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}履歴 - ExhibiReport{% endblock %}
+{% block content %}
+<div x-data="historyPage()" class="max-w-[1440px] mx-auto px-6 py-8 animate-fade-in">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-semibold">レポート履歴</h2>
+        <button
+            @click="clearAll()"
+            x-show="!loading && reports.length > 0"
+            :disabled="clearing"
+            class="px-4 py-2 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 text-red-700 dark:text-red-400 text-xs font-medium rounded-lg transition-colors disabled:opacity-50">
+            <span x-show="!clearing">🗑️ すべて削除</span>
+            <span x-show="clearing">削除中...</span>
+        </button>
+    </div>
+
+    <div x-show="loading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin h-8 w-8 text-primary" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+    </div>
+
+    <div x-show="!loading && reports.length === 0" class="text-center py-20">
+        <p class="text-slate-400 text-sm">まだ履歴がありません</p>
+        <a href="/post-report" class="mt-4 inline-block px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">レポートを作成する</a>
+    </div>
+
+    <div x-show="!loading && reports.length > 0" class="grid gap-4">
+        <template x-for="report in reports" :key="report.report_id">
+            <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-5 hover:border-primary/30 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs px-2 py-0.5 rounded-full" :class="report.mode === 'pre_research' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'" x-text="report.mode === 'pre_research' ? '🔍 事前調査' : '📝 事後報告'"></span>
+                            <span class="text-xs text-slate-400" x-text="new Date(report.created_at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })"></span>
+                        </div>
+                        <h3 class="font-medium text-sm" x-text="report.exhibition_name || '（名称未設定）'"></h3>
+                        <p class="text-xs text-slate-500 mt-0.5"><span x-text="report.company_count"></span>社</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button
+                            x-show="report.mode === 'pre_research'"
+                            @click="resumePreResearch(report.report_id)"
+                            class="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-lg transition-colors">
+                            🔍 事前調査を再開
+                        </button>
+                        <button
+                            x-show="report.mode === 'post_report'"
+                            @click="resumePostReport(report.report_id)"
+                            class="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-medium rounded-lg transition-colors">
+                            📝 事後報告を再開
+                        </button>
+                        <button @click="deleteReport(report.report_id)" class="px-3 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-medium rounded-lg transition-colors" title="このレポートを削除">🗑️</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Report Detail Modal -->
+    <div x-show="showDetail" x-transition class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showDetail = false" style="display: none;">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-y-auto p-6 mx-4" @click.stop>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold" x-text="detailData?.exhibition?.name || 'レポート詳細'"></h3>
+                <button @click="showDetail = false" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">✕</button>
+            </div>
+            <pre class="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono" x-text="JSON.stringify(detailData, null, 2)"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function historyPage() {
+    return {
+        reports: [],
+        loading: true,
+        clearing: false,
+        showDetail: false,
+        detailData: null,
+
+        async init() {
+            try {
+                const res = await fetch('/api/history?user_id=default');
+                const data = await res.json();
+                if (data.success) this.reports = data.reports || [];
+            } catch (e) {}
+            this.loading = false;
+        },
+
+        async viewReport(id) {
+            try {
+                const res = await fetch(`/api/history/${id}?user_id=default`);
+                const data = await res.json();
+                if (data.success) {
+                    this.detailData = data.data;
+                    this.showDetail = true;
+                }
+            } catch (e) { showToast('レポートの読み込みに失敗しました', 'error'); }
+        },
+
+        async reuseConfig(id) {
+            try {
+                const res = await fetch(`/api/history/${id}?user_id=default`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    await fetch('/api/config/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: 'default',
+                            purpose: data.data.purpose || '',
+                            themes: data.data.themes || [],
+                        }),
+                    });
+                    showToast('設定を保存しました。次回の調査で読み込めます', 'success');
+                }
+            } catch (e) { showToast('失敗しました', 'error'); }
+        },
+
+        async resumePreResearch(id) {
+            try {
+                const res = await fetch(`/api/history/${id}?user_id=default`);
+                const data = await res.json();
+                if (!data.success || !data.data) {
+                    showToast('レポートの取得に失敗しました', 'error');
+                    return;
+                }
+                const r = data.data;
+                // localStorage に書き込んで /pre-research 側で復元させる
+                const snapshot = {
+                    step: 3,
+                    exhibitionUrl: r.exhibition?.url || '',
+                    exhibition: r.exhibition || { name: '', url: '', exhibitor_list_url: '', venue: '', dates: '', organizer: '' },
+                    purpose: r.purpose || '',
+                    themes: r.themes || [],
+                    recommendations: (r.companies || []).map(c => ({
+                        name: c.name,
+                        industry: c.industry || '',
+                        reason: c.reason || '',
+                        matching_themes: c.matching_themes || [],
+                        relevance_score: c.relevance_score || 1,
+                        memo: c.memo || '',
+                        selected: true,
+                    })),
+                    reportId: r.report_id,
+                    savedAt: Date.now(),
+                    __resumeOnce: true,  // 出发点フラグ：復元後に1回だけ使われる
+                };
+                localStorage.setItem('exhibit:pre_research:v1', JSON.stringify(snapshot));
+                showToast('事前調査を再開します', 'success');
+                setTimeout(() => { window.location.href = '/pre-research'; }, 400);
+            } catch (e) {
+                console.error('resumePreResearch error:', e);
+                showToast('再開に失敗しました: ' + e.message, 'error');
+            }
+        },
+
+        async resumePostReport(id) {
+            try {
+                const res = await fetch(`/api/history/${id}?user_id=default`);
+                const data = await res.json();
+                if (!data.success || !data.data) {
+                    showToast('レポートの取得に失敗しました', 'error');
+                    return;
+                }
+                const r = data.data;
+                const companies = r.companies || [];
+                const results = r.results || [];
+                // ステータスを全て done として復元（保存済みなら完了しているはず）
+                const companyStatuses = companies.map(c => ({
+                    name: c.name || '',
+                    status: results.find(rr => rr && rr.company_name === c.name) ? 'done' : 'waiting',
+                }));
+                // 企業一覧を rows に展開（Step1 で編集できるように）。
+                // 5件未満なら空行を埋めて最低5行確保（事後報告画面のデフォルト挙動と統一）
+                const rows = companies.map(c => ({ name: c.name || '', memo: c.memo || '' }));
+                while (rows.length < 5) rows.push({ name: '', memo: '' });
+                const snapshot = {
+                    step: 4,                  // 結果画面へ直送
+                    exhibition: r.exhibition || { name: '', url: '', exhibitor_list_url: '', venue: '', dates: '', organizer: '' },
+                    exhibitionUrl: r.exhibition?.url || '',
+                    purpose: r.purpose || '',
+                    themes: r.themes || [],
+                    preList: [],
+                    rows: rows,
+                    companies: companies,
+                    results: results,
+                    companyStatuses: companyStatuses,
+                    selectedAnalyses: [1, 2, 3],
+                    analysisResults: [],
+                    resultTab: 'all',
+                    reportId: r.report_id,
+                    savedAt: Date.now(),
+                    __resumeOnce: true,  // 出発点フラグ：復元後に1回だけ使われる
+                };
+                localStorage.setItem('exhibit:post_report:v1', JSON.stringify(snapshot));
+                showToast('事後報告を再開します', 'success');
+                setTimeout(() => { window.location.href = '/post-report'; }, 400);
+            } catch (e) {
+                console.error('resumePostReport error:', e);
+                showToast('再開に失敗しました: ' + e.message, 'error');
+            }
+        },
+
+        async deleteReport(id) {
+            if (!confirm('このレポートを削除します。よろしいですか？')) return;
+            try {
+                const res = await fetch(`/api/history/${id}?user_id=default`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    this.reports = this.reports.filter(r => r.report_id !== id);
+                    showToast('レポートを削除しました', 'success');
+                } else {
+                    showToast(data.error || '削除に失敗しました', 'error');
+                }
+            } catch (e) { showToast('削除エラー: ' + e.message, 'error'); }
+        },
+
+        async clearAll() {
+            if (!confirm(`全 ${this.reports.length} 件のレポートを削除します。この操作は取り消せません。よろしいですか？`)) return;
+            this.clearing = true;
+            try {
+                const res = await fetch('/api/history/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'default' }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.reports = [];
+                    showToast(`${data.deleted_count} 件のレポートを削除しました`, 'success');
+                } else {
+                    showToast('削除に失敗しました', 'error');
+                }
+            } catch (e) { showToast('削除エラー: ' + e.message, 'error'); }
+            this.clearing = false;
+        },
+    };
+}
+</script>
+{% endblock %}

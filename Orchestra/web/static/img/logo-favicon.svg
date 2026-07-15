@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="favCenter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <!-- 背景円 (favicon 視認性のため実塗り) -->
+  <circle cx="16" cy="16" r="15" fill="#F0F9FF"/>
+  <!-- 6 エージェント -->
+  <circle cx="16"   cy="6"    r="1.8" fill="#06B6D4"/>
+  <circle cx="24.6" cy="11"   r="1.6" fill="#22D3EE"/>
+  <circle cx="24.6" cy="21"   r="1.6" fill="#22D3EE"/>
+  <circle cx="16"   cy="26"   r="1.6" fill="#22D3EE"/>
+  <circle cx="7.4"  cy="21"   r="1.6" fill="#22D3EE"/>
+  <circle cx="7.4"  cy="11"   r="1.6" fill="#06B6D4"/>
+  <!-- 中心 -->
+  <circle cx="16" cy="16" r="5" fill="url(#favCenter)"/>
+  <ellipse cx="16" cy="16.6" rx="2" ry="1.4" fill="#FFFFFF" opacity="0.9" transform="rotate(-20 16 16.6)"/>
+</svg>

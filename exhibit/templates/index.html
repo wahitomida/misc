@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}ExhibiReport - 展示会調査レポート自動生成{% endblock %}
+{% block content %}
+<div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)"
+     class="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center px-6 py-12">
+
+    <!-- Hero Section -->
+    <div class="text-center max-w-3xl">
+        <!-- メインコピー1行目 -->
+        <h1 class="text-[2.75rem] sm:text-5xl md:text-[3.5rem] font-bold tracking-[-0.02em] leading-[1.1]">
+            <span x-show="show" x-cloak
+                  x-transition:enter="transition duration-700 ease-out delay-100"
+                  x-transition:enter-start="opacity-0 translate-y-5"
+                  x-transition:enter-end="opacity-100 translate-y-0"
+                  class="block bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 dark:from-white dark:via-indigo-200 dark:to-white bg-clip-text text-transparent">
+                展示会の調査を、
+            </span>
+            <span x-show="show" x-cloak
+                  x-transition:enter="transition duration-700 ease-out delay-200"
+                  x-transition:enter-start="opacity-0 translate-y-5"
+                  x-transition:enter-end="opacity-100 translate-y-0"
+                  class="block bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 dark:from-indigo-400 dark:via-violet-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                もっとスマートに。
+            </span>
+        </h1>
+
+        <!-- サブコピー -->
+        <p x-show="show" x-cloak
+           x-transition:enter="transition duration-700 ease-out delay-[300ms]"
+           x-transition:enter-start="opacity-0 translate-y-3"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           class="mt-6 text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-xl mx-auto leading-relaxed">
+            AI × Google検索グラウンディングで、<br class="hidden sm:block">
+            展示会の企業調査を自動化。
+        </p>
+    </div>
+
+    <!-- Mode Cards -->
+    <div x-show="show" x-cloak
+         x-transition:enter="transition duration-700 ease-out delay-[500ms]"
+         x-transition:enter-start="opacity-0 translate-y-7 scale-[0.98]"
+         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+         class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+
+        <!-- 事前調査カード -->
+        <a href="/pre-research"
+           @click="localStorage.removeItem('exhibit:pre_research:v1')"
+           class="group relative block">
+            <!-- 外側の光のアウトライン（ホバー時のみ表示） -->
+            <div class="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 blur-sm" aria-hidden="true"></div>
+            <!-- カード本体 -->
+            <div class="relative h-full bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/60 dark:border-slate-700/60 rounded-2xl p-7 transition duration-300 group-hover:border-transparent group-hover:shadow-2xl group-hover:shadow-indigo-500/15">
+                <!-- アイコン -->
+                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/25 group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">事前調査</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    展示会の前に訪問すべき企業をピックアップ。AIが出展者一覧から関心テーマにマッチする企業を提案します。
+                </p>
+                <div class="mt-6 flex items-center text-indigo-600 dark:text-indigo-400 text-sm font-medium">
+                    <span>はじめる</span>
+                    <svg class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </div>
+        </a>
+
+        <!-- 事後報告カード -->
+        <a href="/post-report"
+           @click="localStorage.removeItem('exhibit:post_report:v1')"
+           class="group relative block">
+            <div class="absolute -inset-0.5 bg-gradient-to-r from-violet-500 to-purple-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 blur-sm" aria-hidden="true"></div>
+            <div class="relative h-full bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/60 dark:border-slate-700/60 rounded-2xl p-7 transition duration-300 group-hover:border-transparent group-hover:shadow-2xl group-hover:shadow-violet-500/15">
+                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mb-6 shadow-lg shadow-violet-500/25 group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">事後報告</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    展示会の後に訪問企業の調査レポートを作成。並列検索で高速に企業情報を収集し、レポートを自動生成します。
+                </p>
+                <div class="mt-6 flex items-center text-violet-600 dark:text-violet-400 text-sm font-medium">
+                    <span>はじめる</span>
+                    <svg class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 下部サブテキスト -->
+    <p x-show="show" x-cloak
+       x-transition:enter="transition duration-700 ease-out delay-[700ms]"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       class="mt-12 text-center text-sm text-slate-400 dark:text-slate-500 flex items-center justify-center gap-2">
+        <span class="inline-block w-1 h-1 rounded-full bg-indigo-400"></span>
+        事前調査のデータは事後報告に引き継げます
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{# チャットバブル (4 バリエーション統合)
+   設計書: doc/ui/03_components.md §2
+
+   親スコープに必要:
+     - item: { id, type, ... }
+       - type='utterance'     → item.utterance: { agent, content, round, tokens }
+       - type='conclusion'    → item.conclusion: { round, concluder_emoji, concluder_name, content }
+       - type='system_event'  → item.event: { icon, message }
+         icon は SVG name (例: 'bolt', 'clock', 'chart-bar', 'pencil-square',
+              'musical-note', 'film', 'sparkles')
+       - type='round_divider' → item.round: { number, topic, pattern }
+#}
+{% import "components/icon.html" as ui %}
+
+{# ─────────────── 通常発言 ─────────────── #}
+<template x-if="item.type === 'utterance'">
+  <div class="flex items-start gap-3 mb-4 animate-slide-up">
+    {# アバター #}
+    <div class="flex-shrink-0 w-10 h-10 rounded-full
+                bg-slate-100 dark:bg-slate-800
+                flex items-center justify-center text-xl shadow-sm">
+      <span x-text="item.utterance.agent?.emoji || '🎭'"></span>
+    </div>
+
+    {# 発言本体 #}
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300"
+              x-text="item.utterance.agent?.name || item.utterance.agent?.role_id || '?'"></span>
+        <span class="text-xs text-slate-400"
+              x-text="'Round ' + (item.utterance.round ?? '?')"></span>
+      </div>
+
+      <div class="p-3 rounded-2xl rounded-tl-sm max-w-[600px]
+                  bg-white dark:bg-slate-800
+                  border border-slate-200 dark:border-slate-700 shadow-sm">
+        <p class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"
+           x-text="item.utterance.content"></p>
+      </div>
+
+      <div class="flex items-center gap-3 mt-1 text-xs text-slate-400">
+        <span x-show="item.utterance.tokens"
+              x-text="(item.utterance.tokens || 0) + ' tokens'"></span>
+        <span x-show="item.utterance.duration_sec"
+              x-text="(item.utterance.duration_sec || 0).toFixed(1) + 's'"></span>
+      </div>
+    </div>
+  </div>
+</template>
+
+{# ─────────────── ラウンド結論 ─────────────── #}
+<template x-if="item.type === 'conclusion'">
+  <div class="my-6 mx-4 animate-scale-in">
+    <div class="p-4 rounded-xl
+                border-2 border-amber-400 dark:border-amber-500
+                bg-gradient-to-r from-amber-50 to-orange-50
+                dark:from-amber-900/20 dark:to-orange-900/20 shadow-md">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-amber-600">{{ ui.icon('flag', 'w-5 h-5') }}</span>
+        <span class="font-bold text-amber-700 dark:text-amber-300 text-sm">
+          Round <span x-text="item.conclusion.round"></span> 結論
+        </span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">
+          (by
+          <span x-text="(item.conclusion.concluder_emoji || '') +
+                         (item.conclusion.concluder_name || item.conclusion.concluder || '')"></span>)
+        </span>
+      </div>
+      <p class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap"
+         x-text="item.conclusion.content"></p>
+    </div>
+  </div>
+</template>
+
+{# ─────────────── システムイベント ─────────────── #}
+<template x-if="item.type === 'system_event'">
+  <div class="flex items-center justify-center my-4 gap-2 animate-fade-in text-orange-500 dark:text-orange-400">
+    <span class="inline-flex">
+      <template x-if="item.event?.icon === 'clock'">{{ ui.icon('clock', 'w-4 h-4') }}</template>
+      <template x-if="item.event?.icon === 'chart-bar'">{{ ui.icon('chart-bar', 'w-4 h-4') }}</template>
+      <template x-if="item.event?.icon === 'pencil-square'">{{ ui.icon('pencil-square', 'w-4 h-4') }}</template>
+      <template x-if="item.event?.icon === 'musical-note'">{{ ui.icon('musical-note', 'w-4 h-4') }}</template>
+      <template x-if="item.event?.icon === 'film'">{{ ui.icon('film', 'w-4 h-4') }}</template>
+      <template x-if="item.event?.icon === 'sparkles'">{{ ui.icon('sparkles', 'w-4 h-4') }}</template>
+      <template x-if="!item.event?.icon || !['clock','chart-bar','pencil-square','musical-note','film','sparkles'].includes(item.event.icon)">
+        {{ ui.icon('bolt', 'w-4 h-4') }}
+      </template>
+    </span>
+    <span class="text-sm italic"
+          x-text="item.event?.message || ''"></span>
+  </div>
+</template>
+
+{# ─────────────── ラウンド区切り ─────────────── #}
+<template x-if="item.type === 'round_divider'">
+  <div class="flex items-center my-8 gap-4">
+    <div class="flex-1 border-t border-slate-300 dark:border-slate-600"></div>
+    <div class="flex items-center gap-2 px-4 py-1
+                bg-slate-100 dark:bg-slate-800 rounded-full">
+      <span class="text-xs font-medium text-slate-500 dark:text-slate-400">
+        Round <span x-text="item.round?.number ?? '?'"></span>
+      </span>
+      <span class="text-xs text-sky-600 dark:text-sky-400 font-medium truncate max-w-xs"
+            x-show="item.round?.topic"
+            x-text="item.round?.topic || ''"></span>
+      <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700
+                   text-slate-600 dark:text-slate-300 font-mono"
+            x-show="item.round?.pattern"
+            x-text="item.round?.pattern"></span>
+    </div>
+    <div class="flex-1 border-t border-slate-300 dark:border-slate-600"></div>
+  </div>
+</template>

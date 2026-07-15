@@ -1,0 +1,66 @@
+{# ウィザードステップインジケーター
+   設計書: doc/ui/02_page_structure.md §4
+
+   使用方法 (ページ側):
+     {% set steps = [
+       {"num": 1, "label": "入力"},
+       {"num": 2, "label": "計画"},
+       {"num": 3, "label": "議論"},
+       {"num": 4, "label": "結果"},
+     ] %}
+     {% include "partials/step_indicator.html" %}
+
+   Alpine.js 側で `steps` / `step` / `maxStepReached` / `goToStep(n)` を持つこと:
+     x-data="{
+       step: 1,
+       maxStepReached: 1,
+       steps: [{num:1,label:'入力'}, ...],
+       goToStep(n) { if (n <= this.maxStepReached) this.step = n; }
+     }"
+#}
+<nav class="flex items-center justify-center mb-8" aria-label="進行状況">
+  <template x-for="(s, i) in steps" :key="s.num">
+    <div class="flex items-center">
+      {# ステップ丸 + ラベル #}
+      <button type="button"
+              @click="goToStep(s.num)"
+              :disabled="s.num > maxStepReached"
+              :aria-current="step === s.num ? 'step' : false"
+              :aria-label="s.label + ' (Step ' + s.num + ')'"
+              class="flex flex-col items-center transition-opacity
+                     disabled:cursor-not-allowed disabled:opacity-70
+                     enabled:cursor-pointer enabled:hover:scale-105"
+              :class="s.num <= maxStepReached ? 'group' : ''">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center
+                    text-sm font-bold transition-all duration-300
+                    group-hover:ring-2 group-hover:ring-sky-300 dark:group-hover:ring-sky-600"
+             :class="{
+               'bg-sky-600 text-white shadow-lg shadow-sky-200 dark:shadow-sky-900':
+                 step === s.num,
+               'bg-teal-500 text-white': step > s.num,
+               'bg-slate-200 dark:bg-slate-700 text-slate-500': step < s.num,
+             }">
+          <span x-show="step <= s.num" x-text="s.num"></span>
+          <span x-show="step > s.num">✓</span>
+        </div>
+        <span class="text-xs mt-1 transition-colors"
+              :class="{
+                'text-sky-600 dark:text-sky-400 font-bold': step === s.num,
+                'text-teal-600 dark:text-green-400': step > s.num,
+                'text-slate-400': step < s.num,
+              }"
+              x-text="s.label">
+        </span>
+      </button>
+
+      {# 接続線 #}
+      <div x-show="i < steps.length - 1"
+           class="w-12 sm:w-20 h-0.5 mx-2 transition-colors duration-300"
+           :class="{
+             'bg-teal-500': step > s.num,
+             'bg-slate-200 dark:bg-slate-700': step <= s.num,
+           }">
+      </div>
+    </div>
+  </template>
+</nav>

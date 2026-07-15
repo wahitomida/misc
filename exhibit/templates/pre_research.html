@@ -1,0 +1,600 @@
+{% extends "base.html" %}
+{% block title %}事前調査 - ExhibiReport{% endblock %}
+{% block content %}
+<div x-data="preResearch()" class="max-w-[1440px] mx-auto px-6 py-8 animate-fade-in">
+    <!-- Step Indicator -->
+    <div class="flex items-center justify-center gap-2 mb-2 relative">
+        <template x-for="(label, i) in stepLabels" :key="i">
+            <div class="flex items-center">
+                <button @click="jumpToStep(i + 1)"
+                    :class="step >= (i + 1) ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors hover:ring-2 hover:ring-primary/30">
+                    <span class="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center" x-text="i + 1"></span>
+                    <span x-text="label"></span>
+                </button>
+                <div x-show="i < 3"
+                    :class="step > (i + 1) ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'"
+                    class="w-8 h-0.5 mx-1 transition-colors"></div>
+            </div>
+        </template>
+    </div>
+    <!-- 復元通知 + リセットボタン + 履歴 -->
+    <div class="flex items-center justify-center gap-3 mb-6 min-h-[1.5rem]">
+        <span x-show="restoredFromStorage" x-transition class="text-xs text-emerald-600 dark:text-emerald-400">
+            ✓ 前回のセッションを復元しました
+        </span>
+        <a href="/history" class="text-xs text-slate-400 hover:text-primary transition-colors" title="保存済み履歴を見る">📚 履歴を見る</a>
+        <button
+            @click="resetAll()"
+            x-show="hasAnyData()"
+            class="text-xs text-slate-400 hover:text-red-500 transition-colors"
+            title="入力内容と提案結果をすべて破棄して最初からやり直す">
+            🗑️ すべてリセット
+        </button>
+    </div>
+
+    <!-- Step 1: 展示会情報入力 -->
+    <div x-show="step === 1" x-transition class="grid grid-cols-5 gap-8">
+        <div class="col-span-2 space-y-6">
+            <div>
+                <h2 class="text-xl font-semibold mb-1">展示会情報</h2>
+                <p class="text-sm text-slate-500">URLを入力すると自動で情報を取得します</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1.5">展示会URL</label>
+                <input type="url" x-model="exhibitionUrl" @keydown.enter="fetchExhibition()" placeholder="https://www.example.com/exhibition" class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                <button @click="fetchExhibition()" :disabled="fetching" class="mt-3 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50">
+                    <span x-show="!fetching">情報を取得</span>
+                    <span x-show="fetching" class="flex items-center gap-2"><svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>取得中...</span>
+                </button>
+            </div>
+            <details class="group">
+                <summary class="text-sm text-slate-500 cursor-pointer hover:text-primary">URLがない場合（手動入力）</summary>
+                <div class="mt-3 space-y-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <div><label class="block text-xs font-medium mb-1">展示会名</label><input type="text" x-model="exhibition.name" class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>
+                    <div><label class="block text-xs font-medium mb-1">会場</label><input type="text" x-model="exhibition.venue" class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>
+                    <div><label class="block text-xs font-medium mb-1">会期</label><input type="text" x-model="exhibition.dates" class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>
+                    <div><label class="block text-xs font-medium mb-1">出展者一覧URL</label><input type="url" x-model="exhibition.exhibitor_list_url" class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>
+                </div>
+            </details>
+        </div>
+        <div class="col-span-3">
+            <div x-show="exhibition.name" x-transition class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6">
+                <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">プレビュー</h3>
+                <div class="space-y-3">
+                    <div class="flex gap-3"><span class="text-xs text-slate-400 w-20 shrink-0">展示会名</span><span class="text-sm font-medium" x-text="exhibition.name"></span></div>
+                    <div class="flex gap-3"><span class="text-xs text-slate-400 w-20 shrink-0">会場</span><span class="text-sm" x-text="exhibition.venue"></span></div>
+                    <div class="flex gap-3"><span class="text-xs text-slate-400 w-20 shrink-0">会期</span><span class="text-sm" x-text="exhibition.dates"></span></div>
+                    <div class="flex gap-3"><span class="text-xs text-slate-400 w-20 shrink-0">主催者</span><span class="text-sm" x-text="exhibition.organizer"></span></div>
+                    <div class="flex gap-3"><span class="text-xs text-slate-400 w-20 shrink-0">URL</span><a :href="exhibition.url" class="text-sm text-primary hover:underline truncate" x-text="exhibition.url" target="_blank"></a></div>
+                </div>
+                <div class="flex gap-2 mt-6">
+                    <a href="/" class="px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← トップへ</a>
+                    <button @click="goToStep(2)" class="px-5 py-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">✅ OK</button>
+                    <button @click="editMode = true" class="px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">✏️ 修正</button>
+                </div>
+            </div>
+            <div x-show="!exhibition.name" class="h-64 flex items-center justify-center text-slate-400 dark:text-slate-600 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                <p class="text-sm">URLを入力して情報を取得してください</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: 目的・テーマ入力 -->
+    <div x-show="step === 2" x-transition class="grid grid-cols-5 gap-8">
+        <div class="col-span-2 space-y-6">
+            <div>
+                <h2 class="text-xl font-semibold mb-1">目的・テーマ</h2>
+                <p class="text-sm text-slate-500">調査の目的と関心テーマを入力してください</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1.5">調査目的</label>
+                <textarea x-model="purpose" rows="3" placeholder="例: NWソリューションの最新動向調査" class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1.5">関心テーマ</label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                    <template x-for="(theme, idx) in themes" :key="idx">
+                        <span class="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full animate-scale-in">
+                            <span x-text="theme"></span>
+                            <button @click="themes.splice(idx, 1)" class="hover:text-red-500 transition-colors">×</button>
+                        </span>
+                    </template>
+                </div>
+                <input type="text" x-model="themeInput" @keydown.enter.prevent="addTheme()" placeholder="テーマを入力してEnter" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+            </div>
+            <div class="flex items-center gap-4 text-sm">
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="saveConfig" class="rounded border-slate-300"><span>この設定を保存する</span></label>
+                <button @click="loadConfig()" class="text-primary hover:underline">前回の設定を読み込む</button>
+            </div>
+            <div class="flex gap-2">
+                <button @click="step = 1" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 戻る</button>
+                <button @click="goToStep(3)" class="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">次へ →</button>
+            </div>
+        </div>
+        <div class="col-span-3 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6">
+            <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">入力状況</h3>
+            <div class="space-y-4">
+                <div><span class="text-xs text-slate-400">展示会</span><p class="text-sm font-medium mt-0.5" x-text="exhibition.name"></p></div>
+                <div><span class="text-xs text-slate-400">目的</span><p class="text-sm mt-0.5" x-text="purpose || '（未入力）'"></p></div>
+                <div><span class="text-xs text-slate-400">テーマ</span><p class="text-sm mt-0.5" x-text="themes.length > 0 ? themes.join(' / ') : '（未入力）'"></p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: おすすめ企業一覧 -->
+    <div x-show="step === 3" x-transition class="grid grid-cols-5 gap-8">
+        <div class="col-span-2">
+            <h2 class="text-xl font-semibold mb-1">おすすめ企業</h2>
+            <p class="text-sm text-slate-500 mb-4">AIが関心テーマにマッチする企業を提案…</p>
+            <div x-show="recommending" class="flex items-center gap-3 text-sm text-slate-500">
+                <svg class="animate-spin h-5 w-5 text-primary" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                おすすめ企業を検索中...
+            </div>
+            <!-- 中断検知（リロードでAPIコールが途中で止まった場合） -->
+            <div x-show="recommendInterrupted && !recommending"
+                class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl text-sm">
+                <p class="font-medium text-amber-800 dark:text-amber-300 mb-1">⚠️ 検索が中断されました</p>
+                <p class="text-xs text-amber-700 dark:text-amber-400/80">ページをリロードしたため、AIによる企業推薦が途中で止まりました。</p>
+            </div>
+        </div>
+        <div class="col-span-3">
+            <div x-show="!recommending && recommendations.length > 0" class="space-y-3">
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <button @click="selectAll(true)" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">全選択</button>
+                    <button @click="selectAll(false)" class="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">全解除</button>
+                    <button @click="if (confirm('現在の推薦一覧を破棄してもう一度検索します。よろしいですか？')) startRecommend()"
+                        class="ml-auto px-3 py-1.5 text-xs font-medium bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 rounded-lg transition-colors"
+                        title="テーマや目的を変更したときに使います">🔄 再検索</button>
+                </div>
+                <template x-for="(rec, idx) in recommendations" :key="idx">
+                    <label class="flex items-start gap-3 p-4 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-xl cursor-pointer hover:border-primary/30 transition-colors" :class="rec.selected && 'border-primary/50 bg-primary/5'">
+                        <input type="checkbox" x-model="rec.selected" class="mt-0.5 rounded border-slate-300">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-sm" x-text="rec.name"></span>
+                                <span class="text-xs text-slate-400" x-text="rec.industry"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1" x-text="rec.reason"></p>
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                <template x-for="t in rec.matching_themes">
+                                    <span class="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-medium rounded-full" x-text="t"></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="text-xs font-mono text-slate-400" x-text="'★'.repeat(rec.relevance_score) + '☆'.repeat(3 - rec.relevance_score)"></div>
+                    </label>
+                </template>
+                <button @click="goToStep(4)" class="mt-4 px-6 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">
+                    選択した企業で訪問リスト作成 (<span x-text="selectedCount()"></span>社)
+                </button>
+                <button @click="step = 2" class="mt-4 ml-2 px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 戻る</button>
+            </div>
+            <!-- 結果なし -->
+            <div x-show="!recommending && !recommendInterrupted && recommendations.length === 0" class="bg-white dark:bg-slate-800/50 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-8 text-center">
+                <div class="text-4xl mb-3">🤔</div>
+                <h3 class="text-base font-semibold mb-2">候補が見つかりませんでした</h3>
+                <p class="text-sm text-slate-500 mb-4">
+                    展示会URLや出展者一覧URLが正しいか、関心テーマが具体的すぎないかご確認ください。<br>
+                    手動で企業を追加するには「事後報告モード」を利用できます。
+                </p>
+                <div class="flex gap-2 justify-center">
+                    <button @click="step = 2" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 戻って修正</button>
+                    <button @click="startRecommend()" class="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">🔄 再試行</button>
+                </div>
+            </div>
+
+            <!-- 中断された場合の再開パネル -->
+            <div x-show="recommendInterrupted && !recommending" class="bg-white dark:bg-slate-800/50 border border-amber-300 dark:border-amber-700/50 rounded-2xl p-8 text-center">
+                <div class="text-4xl mb-3">⚡</div>
+                <h3 class="text-base font-semibold mb-2">検索を再開しますか？</h3>
+                <p class="text-sm text-slate-500 mb-4">
+                    ページリロードにより、AIによる企業推薦が中断されました。<br>
+                    同じ条件でもう一度検索します。
+                </p>
+                <div class="flex gap-2 justify-center">
+                    <button @click="step = 2" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 戻る</button>
+                    <button @click="recommendInterrupted = false; startRecommend()"
+                        class="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">🔄 再開する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 4: 訪問リスト確定 -->
+    <div x-show="step === 4" x-transition class="grid grid-cols-5 gap-8">
+        <div class="col-span-2 space-y-4">
+            <h2 class="text-xl font-semibold mb-1">訪問リスト</h2>
+            <p class="text-sm text-slate-500">各企業にメモを追加できます</p>
+            <template x-for="(company, idx) in selectedCompanies()" :key="idx">
+                <div class="p-3 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-xl">
+                    <div class="font-medium text-sm" x-text="company.name"></div>
+                    <input type="text" x-model="company.memo" placeholder="メモ（任意）" class="mt-2 w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary/20">
+                </div>
+            </template>
+        </div>
+        <div class="col-span-3">
+            <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6">
+                <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">プレビュー</h3>
+                <pre class="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono leading-relaxed" x-text="generatePreviewText()"></pre>
+            </div>
+            <div class="flex gap-3 mt-4">
+                <button @click="step = 3" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 戻る</button>
+                <button @click="exportText()" class="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors">📄 テキストファイル出力</button>
+                <button @click="copyToClipboard()" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">📋 クリップボードにコピー</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-4 flex items-center gap-1.5">💡 展示会後に「事後報告」でこのデータを引き継げます</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function preResearch() {
+    return {
+        step: 1,
+        stepLabels: ['展示会', 'テーマ', '企業選択', 'リスト'],
+        exhibitionUrl: '',
+        exhibition: { name: '', url: '', exhibitor_list_url: '', venue: '', dates: '', organizer: '' },
+        fetching: false,
+        editMode: false,
+        purpose: '',
+        themes: [],
+        themeInput: '',
+        saveConfig: true,
+        recommendations: [],
+        recommending: false,
+        recommendInterrupted: false,
+        restoredFromStorage: false,
+        _restoring: false,
+        _saveTimer: null,
+        _historySaveTimer: null,
+        _reportId: null,
+
+        init() {
+            this.restoreFromStorage();
+            // 復元バナーは5秒で自動非表示
+            if (this.restoredFromStorage) {
+                setTimeout(() => { this.restoredFromStorage = false; }, 5000);
+            }
+            // 自動保存: 主要な状態を監視
+            this.$watch('step', (n, o) => {
+                this._scheduleSave();
+                // Step4 到達時に履歴へ自動保存（訪問リストが確定したタイミング）
+                if (n === 4 && o !== 4 && !this._restoring && this.selectedCompanies().length > 0) {
+                    this.saveReport('pre_research');
+                }
+            });
+            this.$watch('exhibitionUrl', () => this._scheduleSave());
+            this.$watch('exhibition', () => this._scheduleSave(), { deep: true });
+            this.$watch('purpose', () => this._scheduleSave());
+            this.$watch('themes', () => this._scheduleSave(), { deep: true });
+            this.$watch('recommendations', () => {
+                this._scheduleSave();
+                // Step4 でメモ等を編集したら履歴も更新
+                if (this.step === 4 && this._reportId && !this._restoring) {
+                    this._scheduleHistorySave();
+                }
+            }, { deep: true });
+        },
+
+        addTheme() {
+            const t = this.themeInput.trim();
+            if (t && !this.themes.includes(t)) {
+                this.themes.push(t);
+            }
+            this.themeInput = '';
+        },
+
+        async fetchExhibition() {
+            if (!this.exhibitionUrl && !this.exhibition.name) {
+                showToast('URLまたは展示会名を入力してください', 'warning');
+                return;
+            }
+            this.fetching = true;
+            try {
+                const res = await fetch('/api/exhibition/fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: this.exhibitionUrl, name: this.exhibition.name }),
+                });
+                const data = await res.json();
+                if (data.success && data.data) {
+                    const d = data.data;
+                    // raw_text のみが返るケース（JSON パース失敗）はエラー扱い
+                    if (d.raw_text && !d.name && !d.venue && !d.dates) {
+                        showToast('AIの応答を解析できませんでした。少し時間をおいて再度お試しください', 'error');
+                        this.fetching = false;
+                        return;
+                    }
+                    // 空文字以外のフィールドだけマージ（既存入力を空で上書きしない）
+                    const fields = ['name', 'url', 'exhibitor_list_url', 'venue', 'dates', 'organizer'];
+                    fields.forEach(k => {
+                        const v = d[k];
+                        if (v !== undefined && v !== null && String(v).trim() !== '') {
+                            this.exhibition[k] = v;
+                        }
+                    });
+                    // 入力URLが優先（ユーザーが明示的に指定したものを尊重）
+                    if (this.exhibitionUrl) this.exhibition.url = this.exhibitionUrl;
+                    if (this.exhibition.name) {
+                        showToast('展示会情報を取得しました', 'success');
+                    } else {
+                        showToast('情報が見つかりませんでした。手動で入力してください', 'warning');
+                    }
+                } else {
+                    showToast('情報の取得に失敗しました', 'error');
+                }
+            } catch (e) {
+                console.error('fetchExhibition error:', e);
+                showToast('エラーが発生しました: ' + e.message, 'error');
+            }
+            this.fetching = false;
+        },
+
+        async loadConfig() {
+            try {
+                const res = await fetch('/api/config/load?user_id=default');
+                const data = await res.json();
+                if (data.success && data.data) {
+                    this.purpose = data.data.purpose || '';
+                    this.themes = data.data.themes || [];
+                    showToast('前回の設定を読み込みました', 'success');
+                }
+            } catch (e) { showToast('設定の読み込みに失敗しました', 'error'); }
+        },
+
+        goToStep(n) {
+            if (n === 2) {
+                if (!this.exhibition.name) {
+                    showToast('展示会情報を入力してください', 'warning');
+                    return;
+                }
+            } else if (n === 3) {
+                if (!this.purpose || !this.purpose.trim()) {
+                    showToast('調査目的を入力してください', 'warning');
+                    return;
+                }
+                if (this.themes.length === 0) {
+                    showToast('関心テーマを1つ以上追加してください', 'warning');
+                    return;
+                }
+                // 既に推薦結果がある場合は再検索せず表示（履歴からの再開等）
+                if (this.recommendations.length > 0) {
+                    this.recommending = false;
+                    this.recommendInterrupted = false;
+                    this.step = 3;
+                    return;
+                }
+                this.startRecommend();
+                return;
+            } else if (n === 4) {
+                if (this.selectedCount() === 0) {
+                    showToast('企業を1社以上選択してください', 'warning');
+                    return;
+                }
+            }
+            this.step = n;
+        },
+
+        // ステップインジケーターからのクリック：戦めるは自由、進むはバリデーションを通す
+        jumpToStep(n) {
+            if (n <= this.step) {
+                this.step = n;
+                return;
+            }
+            this.goToStep(n);
+        },
+
+        async startRecommend() {
+            if (!this.purpose || !this.purpose.trim()) {
+                showToast('調査目的を入力してください', 'warning');
+                return;
+            }
+            if (this.themes.length === 0) {
+                showToast('関心テーマを1つ以上追加してください', 'warning');
+                return;
+            }
+            if (this.saveConfig) {
+                fetch('/api/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'default', purpose: this.purpose, themes: this.themes }),
+                });
+            }
+            this.step = 3;
+            this.recommending = true;
+            this.recommendInterrupted = false;
+            this.recommendations = [];
+            // 推薦中フラグをすぐに永続化（リロード検知用）
+            this.persistToStorage();
+            try {
+                const res = await fetch('/api/recommend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exhibition: this.exhibition, purpose: this.purpose, themes: this.themes }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.recommendations = (data.companies || []).map(c => ({ ...c, selected: true, memo: '' }));
+                    if (this.recommendations.length === 0) {
+                        showToast('企業が見つかりませんでした。展示会URLや関心テーマを見直してください', 'warning');
+                    } else {
+                        showToast(`${this.recommendations.length}社の候補が見つかりました`, 'success');
+                        // 推薦結果が出た時点で履歴に保存（Step4 まで進まなくても保存される）
+                        this.saveReport('pre_research');
+                    }
+                } else {
+                    showToast('おすすめ企業の取得に失敗しました', 'error');
+                }
+            } catch (e) {
+                console.error('recommend error:', e);
+                showToast('おすすめ企業の取得に失敗しました: ' + e.message, 'error');
+            }
+            this.recommending = false;
+        },
+
+        selectAll(val) { this.recommendations.forEach(r => r.selected = val); },
+        selectedCount() { return this.recommendations.filter(r => r.selected).length; },
+        selectedCompanies() { return this.recommendations.filter(r => r.selected); },
+
+        generatePreviewText() {
+            const companies = this.selectedCompanies();
+            let text = `=== 展示会 訪問リスト ===\n展示会: ${this.exhibition.name}\n目的: ${this.purpose}\nテーマ: ${this.themes.join(' / ')}\n\n`;
+            companies.forEach((c, i) => {
+                text += `${i + 1}. ${c.name}`;
+                if (c.memo) text += `\n   メモ: ${c.memo}`;
+                text += '\n';
+            });
+            return text;
+        },
+
+        async exportText() {
+            try {
+                const res = await fetch('/api/export/text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exhibition: this.exhibition,
+                        companies: this.selectedCompanies().map(c => ({ name: c.name, memo: c.memo })),
+                        purpose: this.purpose,
+                        themes: this.themes,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    downloadText(data.text, `訪問リスト_${this.exhibition.name}.txt`);
+                    // 履歴に保存
+                    this.saveReport('pre_research');
+                    showToast('テキストファイルを出力しました', 'success');
+                }
+            } catch (e) { showToast('エクスポートに失敗しました', 'error'); }
+        },
+
+        async copyToClipboard() {
+            await navigator.clipboard.writeText(this.generatePreviewText());
+            // 履歴にも保存（テキスト出力と同じ扱い）
+            this.saveReport('pre_research');
+            showToast('クリップボードにコピーしました', 'success');
+        },
+
+        _scheduleHistorySave() {
+            clearTimeout(this._historySaveTimer);
+            this._historySaveTimer = setTimeout(() => this.saveReport('pre_research'), 800);
+        },
+
+        async saveReport(mode) {
+            try {
+                const body = {
+                    mode: mode,
+                    exhibition: this.exhibition,
+                    purpose: this.purpose,
+                    themes: this.themes,
+                    companies: this.selectedCompanies().map(c => ({ name: c.name, memo: c.memo, industry: c.industry, reason: c.reason, matching_themes: c.matching_themes, relevance_score: c.relevance_score })),
+                };
+                if (this._reportId) body.report_id = this._reportId;
+                const res = await fetch('/api/history/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.success && data.report_id) {
+                    this._reportId = data.report_id;
+                }
+            } catch (e) {
+                console.warn('saveReport failed:', e);
+            }
+        },
+
+        // === localStorage 永続化 ===
+        _STORAGE_KEY: 'exhibit:pre_research:v1',
+
+        _scheduleSave() {
+            if (this._restoring) return;
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => this.persistToStorage(), 400);
+        },
+
+        persistToStorage() {
+            try {
+                const snapshot = {
+                    step: this.step,
+                    exhibitionUrl: this.exhibitionUrl,
+                    exhibition: this.exhibition,
+                    purpose: this.purpose,
+                    themes: this.themes,
+                    recommendations: this.recommendations,
+                    recommending: this.recommending,
+                    reportId: this._reportId,
+                    savedAt: Date.now(),
+                };
+                localStorage.setItem(this._STORAGE_KEY, JSON.stringify(snapshot));
+            } catch (e) {
+                console.warn('localStorage save failed:', e);
+            }
+        },
+
+        restoreFromStorage() {
+            try {
+                const raw = localStorage.getItem(this._STORAGE_KEY);
+                if (!raw) return;
+                const s = JSON.parse(raw);
+                if (!s || typeof s !== 'object') return;
+                // 30日以上前のデータは破棄
+                if (s.savedAt && Date.now() - s.savedAt > 30 * 24 * 60 * 60 * 1000) {
+                    localStorage.removeItem(this._STORAGE_KEY);
+                    return;
+                }
+                this._restoring = true;
+                if (s.exhibitionUrl !== undefined) this.exhibitionUrl = s.exhibitionUrl;
+                if (s.exhibition) Object.assign(this.exhibition, s.exhibition);
+                if (s.purpose !== undefined) this.purpose = s.purpose;
+                if (Array.isArray(s.themes)) this.themes = s.themes;
+                if (Array.isArray(s.recommendations)) this.recommendations = s.recommendations;
+                if (typeof s.step === 'number' && s.step >= 1 && s.step <= 4) this.step = s.step;
+                if (s.reportId) this._reportId = s.reportId;
+                // 推薦中の状態でリロードされた場合、中断と見なしてバナーを表示
+                if (s.recommending === true && this.step === 3 && this.recommendations.length === 0) {
+                    this.recommendInterrupted = true;
+                }
+                // 実データがあれば復元バナー表示
+                if (this.exhibition.name || this.purpose || this.themes.length > 0 || this.recommendations.length > 0) {
+                    this.restoredFromStorage = true;
+                }
+                this.$nextTick(() => { this._restoring = false; });
+            } catch (e) {
+                console.warn('localStorage restore failed:', e);
+                this._restoring = false;
+            }
+        },
+
+        hasAnyData() {
+            return !!(this.exhibition.name || this.exhibitionUrl || this.purpose
+                || this.themes.length > 0 || this.recommendations.length > 0);
+        },
+
+        resetAll() {
+            if (!confirm('入力内容・おすすめ企業をすべて破棄します。よろしいですか?')) return;
+            try { localStorage.removeItem(this._STORAGE_KEY); } catch (e) {}
+            this._restoring = true;
+            this.step = 1;
+            this.exhibitionUrl = '';
+            this.exhibition = { name: '', url: '', exhibitor_list_url: '', venue: '', dates: '', organizer: '' };
+            this.purpose = '';
+            this.themes = [];
+            this.themeInput = '';
+            this.recommendations = [];
+            this.restoredFromStorage = false;
+            this._reportId = null;
+            this.editMode = false;
+            this.fetching = false;
+            this.recommending = false;
+            this.$nextTick(() => { this._restoring = false; });
+            showToast('すべてリセットしました', 'success');
+        },
+    };
+}
+</script>
+{% endblock %}

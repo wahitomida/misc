@@ -1,0 +1,2619 @@
+{% extends "base.html" %}
+{% block title %}Code Review — AI Orchestra{% endblock %}
+
+{% block content %}
+{% import "components/icon.html" as ui %}
+<div x-data="reviewPage()" x-init="init()">
+
+  {# ステップインジケーター (5ステップ) #}
+  {% include "partials/step_indicator.html" %}
+
+  {# ============================================================
+     Step 1: 入力設定
+     ============================================================ #}
+  <div x-show="step === 1" x-transition.opacity class="space-y-6">
+
+    {# ---------- Hero: レビュー対象 (フル幅で目立たせる) ---------- #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+                border border-slate-200 dark:border-slate-700 shadow-sm
+                animate-fade-in">
+      <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+        <span class="text-sky-500">{{ ui.icon('folder-open', 'w-5 h-5') }}</span>
+        レビュー対象ディレクトリ <span class="text-red-500">*</span>
+      </label>
+      <div class="flex gap-2 items-stretch">
+        <div class="relative flex-1">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">{{ ui.icon('folder', 'w-5 h-5') }}</span>
+          <input type="text"
+                 x-model="targetPath"
+                 @input="saveToStorage(); validatePath()"
+                 placeholder="例: ./src  または  /home/user/project/src"
+                 class="w-full rounded-xl border
+                        bg-white dark:bg-slate-800
+                        text-slate-900 dark:text-slate-100
+                        px-4 py-3 pl-11 text-base font-mono
+                        focus:ring-2 focus:ring-sky-500 focus:border-transparent
+                        transition"
+                 :class="{
+                   'border-red-400 dark:border-red-500': pathError,
+                   'border-slate-300 dark:border-slate-600': !pathError,
+                 }">
+        </div>
+        <button @click="openFolderPicker()"
+                type="button"
+                class="px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600
+                       bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700
+                       text-sm font-medium text-slate-700 dark:text-slate-200
+                       transition inline-flex items-center gap-1.5 whitespace-nowrap">
+          {{ ui.icon('folder-open', 'w-4 h-4') }} 選択
+        </button>
+      </div>
+      <div class="flex items-center justify-between mt-3 gap-3 flex-wrap">
+        <div class="text-xs flex items-center gap-3">
+          <span class="text-red-500" x-show="pathError" x-text="pathError"></span>
+          <span class="text-slate-400" x-show="!pathError">
+            パスを直接入力するか、「選択」ボタンでフォルダを選んでください。
+          </span>
+        </div>
+        <button @click="submitScan()"
+                :disabled="!isPathValid || scanLoading"
+                class="px-6 py-3 rounded-xl text-white font-medium
+                       bg-sky-600 hover:bg-sky-700
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       transition inline-flex items-center gap-2">
+          <svg x-show="scanLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10"
+                    stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span x-show="!scanLoading" class="inline-flex items-center gap-1">
+            {{ ui.icon('magnifying-glass', 'w-4 h-4') }} コードをスキャン
+          </span>
+          <span x-show="scanLoading">スキャン中...</span>
+        </button>
+      </div>
+    </div>
+
+    {# ---------- 2 カラム: 左 詳細設定 / 右 プレビュー ---------- #}
+    <div class="grid gap-6 md:grid-cols-5">
+
+      {# ────── 左カラム (3/5): 詳細設定 ────── #}
+      <div class="md:col-span-3 space-y-4">
+
+        {# モデル設定アコーディオン #}
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-700">
+          <summary class="flex items-center justify-between p-4 cursor-pointer
+                          hover:bg-slate-50 dark:hover:bg-slate-800/50 transition rounded-xl">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('cog', 'w-4 h-4') }}</span> モデル設定
+            </span>
+            <span class="text-slate-400 transition-transform group-open:rotate-180 inline-flex">{{ ui.icon('chevron-down', 'w-3 h-3') }}</span>
+          </summary>
+          <div class="p-4 pt-0 space-y-4">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">調査モデル (Phase 2)</label>
+              <select x-model="settings.plannerModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-5.4">gpt-5.4 (高品質)</option>
+                <option value="gpt-4.1">gpt-4.1 (標準)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">議論進行モデル (Phase 3)</label>
+              <select x-model="settings.conductorModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-4.1">gpt-4.1 (推奨)</option>
+                <option value="gpt-5.4">gpt-5.4 (高品質)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">統合モデル (Phase 4)</label>
+              <select x-model="settings.synthModel"
+                      @change="saveToStorage()"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600
+                             bg-white dark:bg-slate-800 text-sm px-3 py-2">
+                <option value="gpt-5.4">gpt-5.4 (推奨)</option>
+                <option value="gpt-4.1">gpt-4.1 (標準)</option>
+              </select>
+            </div>
+          </div>
+        </details>
+
+      </div>
+
+      {# ────── 右カラム (2/5, sticky): プレビュー ────── #}
+      <div class="md:col-span-2">
+        <div class="md:sticky md:top-24 space-y-4">
+
+          {# レビュー観点と重点モード (統合) #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-3 inline-flex items-center gap-1.5">
+              <span class="text-sky-500">{{ ui.icon('beaker', 'w-4 h-4') }}</span>
+              レビュー観点
+            </h4>
+
+            {# 重点モード pill 群 (プリセット切替) #}
+            <div class="mb-3">
+              <p class="text-xs text-slate-400 mb-1.5">重点モード (ここでフォーカスを切替)</p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="mode in focusModes" :key="mode.id">
+                  <button type="button"
+                          @click="settings.focus = mode.id; saveToStorage()"
+                          class="inline-flex items-center gap-1 px-2 py-1 rounded-full
+                                 text-xs border transition"
+                          :class="settings.focus === mode.id
+                            ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
+                            : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300
+                               border-slate-200 dark:border-slate-600 hover:border-sky-300
+                               dark:hover:border-sky-600'">
+                    <span x-text="mode.icon"></span>
+                    <span x-text="mode.label"></span>
+                  </button>
+                </template>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5"
+                 x-text="currentFocusMode?.description || ''"></p>
+            </div>
+          </div>
+
+          {# 候補 AI 一覧 (全ロール、使用率降順) #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-2">
+              <span class="text-sky-500">{{ ui.icon('user-group', 'w-4 h-4') }}</span>
+              候補 AI
+              <span class="text-xs text-slate-400 font-normal ml-auto"
+                    x-text="settings.preferredRoleIds.length
+                      ? ('選択 ' + settings.preferredRoleIds.length + ' / 全 ' + availableRoles.length + ' 人')
+                      : ('使用率順 (全 ' + availableRoles.length + ' 人)')"></span>
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="(role, idx) in availableRoles" :key="role.id">
+                <button type="button"
+                        @click="togglePreferredRole(role.id)"
+                        class="relative group animate-fade-in"
+                        :style="'animation-delay: ' + (idx * 30) + 'ms'">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg
+                              border-2 transition cursor-pointer"
+                       :class="settings.preferredRoleIds.includes(role.id)
+                         ? 'bg-sky-100 dark:bg-sky-900/40 border-sky-500 ring-2 ring-sky-300 dark:ring-sky-700 shadow'
+                         : (idx < settings.maxAgents
+                            ? 'bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-500 hover:border-sky-400'
+                            : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 opacity-60 hover:opacity-100 hover:border-sky-400')"
+                       x-text="role.emoji || '🎭'"></div>
+                  {# 選択中チェックマーク #}
+                  <span x-show="settings.preferredRoleIds.includes(role.id)"
+                        class="absolute -top-1 -right-1 w-4 h-4 rounded-full
+                               bg-sky-500 text-white text-[10px] font-bold
+                               flex items-center justify-center shadow">✓</span>
+                  {# ツールチップ #}
+                  <div class="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap
+                              px-2 py-0.5 rounded text-xs
+                              bg-slate-900 text-white opacity-0 group-hover:opacity-100
+                              pointer-events-none transition z-10"
+                       x-text="role.name + ' (参加 ' + (role.stats?.session_count ?? 0) + ' 回)'"></div>
+                </button>
+              </template>
+              <div x-show="!availableRoles.length" class="text-xs text-slate-400 italic">
+                ロール情報を読み込み中...
+              </div>
+            </div>
+            <div class="flex items-center justify-between mt-3 gap-2">
+              <p class="text-xs text-slate-400">
+                <span x-show="!settings.preferredRoleIds.length">
+                  クリックで使いたい AI を選択 (未選択なら自動選定)
+                </span>
+                <span x-show="settings.preferredRoleIds.length">
+                  選択した AI を優先してパートリーダーに選定します
+                </span>
+              </p>
+              <button type="button"
+                      x-show="settings.preferredRoleIds.length"
+                      @click="clearPreferredRoles()"
+                      class="text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                選択をクリア
+              </button>
+            </div>
+
+            {# 最大パートリーダー数 スライダー (候補 AI 枚の下部に配置) #}
+            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-xs text-slate-500">最大パートリーダー数</label>
+                <span class="text-sm font-mono font-medium text-sky-600 dark:text-sky-400"
+                      x-text="settings.maxAgents + '名'">6名</span>
+              </div>
+              <input type="range"
+                     x-model.number="settings.maxAgents"
+                     min="2" max="8" step="1"
+                     @input="onMaxAgentsChange()"
+                     class="w-full h-2 rounded-full appearance-none cursor-pointer
+                            bg-slate-200 dark:bg-slate-700 accent-sky-600">
+              <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span>2名</span>
+                <span>8名</span>
+              </div>
+            </div>
+          </div>
+
+          {# 推定所要時間 #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-2 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('clock', 'w-4 h-4') }}</span> 推定所要時間
+            </h4>
+            <div class="text-2xl font-mono font-bold text-sky-600 dark:text-sky-400"
+                 x-text="formatTime(settings.timeLimit)">10:00</div>
+            <div class="text-xs text-slate-400 mt-1 inline-flex items-center gap-1">
+              Phase 1 (入力) {{ ui.icon('arrow-right', 'w-3 h-3') }} Phase 2-4 (計画 + 議論 + 結果)
+            </div>
+
+            {# 制限時間スライダー (推定所要時間の下部に配置) #}
+            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-xs text-slate-500">制限時間</label>
+                <span class="text-xs font-mono text-sky-600 dark:text-sky-400"
+                      x-text="formatTime(settings.timeLimit)">10:00</span>
+              </div>
+              <input type="range"
+                     x-model.number="settings.timeLimit"
+                     min="60" max="1800" step="30"
+                     @input="saveToStorage()"
+                     class="w-full h-2 rounded-full appearance-none cursor-pointer
+                            bg-slate-200 dark:bg-slate-700 accent-sky-600">
+              <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span>1分</span>
+                <span>30分</span>
+              </div>
+            </div>
+          </div>
+
+          {# リソース見積 #}
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                      border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 class="text-sm font-medium text-slate-500 mb-2 inline-flex items-center gap-1.5">
+              <span class="text-slate-500">{{ ui.icon('chart-bar', 'w-4 h-4') }}</span> リソース見積
+            </h4>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-slate-500">推定リクエスト</span>
+                <span class="font-medium" x-text="'約' + estimatedRequests"></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500">残りクォータ</span>
+                <span class="font-medium" x-text="remainingQuota.toLocaleString()"></span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full bg-teal-500 rounded-full transition-all"
+                     :style="'width: ' + Math.min(100, (estimatedRequests / Math.max(1, remainingQuota)) * 100) + '%'">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 1 後半: スキャン結果 (追加スキャンモジュール)
+     ============================================================ #}
+  <div x-show="step === 1 && scanResult" x-transition.opacity class="space-y-6 mt-8">
+
+    {# ---------- 追加モジュールヘッダー ---------- #}
+    <div class="flex items-center gap-3 pb-3 border-b-2 border-teal-200 dark:border-teal-800">
+      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs
+                   bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300
+                   font-medium">
+        {{ ui.icon('sparkles', 'w-3.5 h-3.5') }} 追加スキャン
+      </span>
+      <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">
+        コード解析結果
+      </h3>
+      <span class="text-xs text-slate-400 ml-auto font-mono truncate max-w-xs"
+            x-show="scanResult?.root_path"
+            x-text="scanResult.root_path"></span>
+    </div>
+
+    {# 統計カード #}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="text-center p-4 rounded-xl
+                  bg-blue-50 dark:bg-blue-900/20
+                  border border-blue-200 dark:border-blue-800">
+        <div class="flex justify-center mb-1 text-blue-500">{{ ui.icon('folder', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400"
+             x-text="scanResult?.total_files ?? 0">0</div>
+        <div class="text-xs text-slate-500 mt-1">ファイル数</div>
+      </div>
+      <div class="text-center p-4 rounded-xl
+                  bg-green-50 dark:bg-green-900/20
+                  border border-green-200 dark:border-green-800">
+        <div class="flex justify-center mb-1 text-teal-500">{{ ui.icon('pencil-square', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-teal-600 dark:text-green-400"
+             x-text="(scanResult?.total_lines ?? 0).toLocaleString()">0</div>
+        <div class="text-xs text-slate-500 mt-1">総行数</div>
+      </div>
+      <div class="text-center p-4 rounded-xl
+                  bg-cyan-50 dark:bg-cyan-900/20
+                  border border-cyan-200 dark:border-cyan-800">
+        <div class="flex justify-center mb-1 text-cyan-500">{{ ui.icon('code-bracket', 'w-6 h-6') }}</div>
+        <div class="text-lg font-bold font-mono text-cyan-600 dark:text-cyan-400 truncate"
+             x-text="Object.keys(scanResult?.languages ?? {}).join(', ') || '—'">—</div>
+        <div class="text-xs text-slate-500 mt-1">言語</div>
+      </div>
+      <div class="text-center p-4 rounded-xl
+                  bg-amber-50 dark:bg-amber-900/20
+                  border border-amber-200 dark:border-amber-800">
+        <div class="flex justify-center mb-1 text-amber-500">{{ ui.icon('adjustments', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400"
+             x-text="scanResult?.total_files
+                     ? Math.round(scanResult.total_lines / scanResult.total_files)
+                     : 0">0</div>
+        <div class="text-xs text-slate-500 mt-1">平均行数</div>
+      </div>
+    </div>
+
+    {# ファイルツリー #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+                border border-slate-200 dark:border-slate-700 shadow-sm">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+                 text-slate-800 dark:text-slate-200">
+        <span class="text-sky-500">{{ ui.icon('folder-open', 'w-5 h-5') }}</span> ファイルツリー
+        <span class="text-sm font-normal text-slate-400"
+              x-text="scanResult?.root_path ? '(' + scanResult.root_path + ')' : ''"></span>
+      </h3>
+      <div class="font-mono text-sm max-h-80 overflow-y-auto custom-scrollbar
+                  bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
+        <pre class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap"
+             x-text="scanResult?.tree_text || '(ツリー情報なし)'"></pre>
+      </div>
+    </div>
+
+    {# パートリーダー割当 #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6
+                border border-slate-200 dark:border-slate-700 shadow-sm">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2
+                 text-slate-800 dark:text-slate-200">
+        <span class="text-sky-500">{{ ui.icon('user-group', 'w-5 h-5') }}</span> パートリーダー割当
+        <span class="text-sm font-normal text-slate-400"
+              x-text="'(' + partLeaders.length + '名)'"></span>
+      </h3>
+      <div class="space-y-3">
+        <template x-for="leader in partLeaders" :key="leader.aspect">
+          <div class="flex items-start gap-3 p-3 rounded-xl
+                      bg-slate-50 dark:bg-slate-700/50">
+            <span class="text-2xl flex-shrink-0" x-text="leader.emoji || '🎭'"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                   x-text="leader.aspect_label || leader.aspect"></div>
+              <div class="text-xs text-slate-400 mb-2"
+                   x-text="leader.role_name || leader.role_id"></div>
+              <div class="flex flex-wrap gap-1">
+                <template x-for="file in (leader.files || [])" :key="file">
+                  <span class="text-xs px-2 py-0.5 rounded-full font-mono
+                               bg-slate-200 dark:bg-slate-600
+                               text-slate-700 dark:text-slate-300"
+                        x-text="file"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="!partLeaders.length">
+          <p class="text-sm text-slate-400 text-center py-4">
+            割当情報がありません
+          </p>
+        </template>
+      </div>
+    </div>
+
+    {# アクションバー (「入力を修正」は Step 1 のフォームが已に上にあるので不要。
+         新規にスキャンし直したい場合は scanResult をクリアする) #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4
+                border-t border-slate-200 dark:border-slate-700">
+      <button @click="scanResult = null; partLeaders = []"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl
+                     text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center justify-center gap-2">
+        {{ ui.icon('arrow-path', 'w-4 h-4') }}
+        <span>スキャンをやり直す</span>
+      </button>
+
+      <button @click="startInvestigation()"
+              :disabled="investigationLoading"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl text-white font-medium
+                     bg-gradient-to-r from-sky-600 to-cyan-600
+                     hover:from-sky-700 hover:to-cyan-700
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition shadow-lg shadow-sky-200 dark:shadow-sky-900/50
+                     flex items-center justify-center gap-2">
+        <svg x-show="investigationLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10"
+                  stroke="currentColor" stroke-width="4" fill="none"></circle>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span x-show="!investigationLoading" class="inline-flex items-center gap-1">
+          {{ ui.icon('play-circle', 'w-4 h-4') }} 調査を開始する
+        </span>
+        <span x-show="investigationLoading">準備中...</span>
+      </button>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 2: 計画/調査 (個別調査 + 相互質問) — 2 カラムレイアウト
+     ============================================================ #}
+  <div x-show="step === 2" x-transition.opacity class="space-y-6">
+
+    {# ---------- サマリーバー (Progress + Severity Filter) ---------- #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4
+                border border-slate-200 dark:border-slate-700 shadow-sm
+                flex flex-col md:flex-row items-center gap-4">
+
+      {# 進捗円グラフ (SVG) #}
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <div class="relative w-14 h-14">
+          <svg class="w-14 h-14 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
+            <circle cx="18" cy="18" r="16" fill="none"
+                    class="stroke-slate-200 dark:stroke-slate-700" stroke-width="3"></circle>
+            <circle cx="18" cy="18" r="16" fill="none"
+                    class="transition-all duration-500"
+                    :class="investigationComplete
+                            ? 'stroke-teal-500'
+                            : 'stroke-sky-500'"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    :stroke-dasharray="((completedLeadersCount / Math.max(1, investigationProgress.length || 1)) * 100) + ' 100'"></circle>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-200"
+                  x-text="completedLeadersCount + '/' + Math.max(1, investigationProgress.length || 1)"></span>
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            調査進捗
+          </div>
+          <div class="text-xs" :class="investigationComplete ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'">
+            <span x-show="investigationComplete" class="inline-flex items-center gap-1">
+              {{ ui.icon('check-circle', 'w-3 h-3') }} 完了 — 議論に進めます
+            </span>
+            <span x-show="!investigationComplete">進行中...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hidden md:block w-px h-10 bg-slate-200 dark:bg-slate-700"></div>
+
+      {# 総発見数 #}
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="text-cyan-500">{{ ui.icon('clipboard-list', 'w-5 h-5') }}</span>
+        <div>
+          <div class="text-lg font-mono font-bold text-slate-700 dark:text-slate-200"
+               x-text="findings.length">0</div>
+          <div class="text-xs text-slate-400">総発見数</div>
+        </div>
+      </div>
+
+      <div class="hidden md:block w-px h-10 bg-slate-200 dark:bg-slate-700"></div>
+
+      {# severity フィルターバッジ #}
+      <div class="flex-1 flex flex-wrap items-center justify-center md:justify-start gap-2 text-xs">
+        <button @click="severityFilter = severityFilter === 'critical' ? 'all' : 'critical'"
+                :disabled="!findingsCounts.critical"
+                class="px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 transition
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+                :class="severityFilter === 'critical'
+                        ? 'bg-red-500 text-white shadow'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60'">
+          <span class="w-2 h-2 rounded-full bg-red-500 inline-block"
+                x-show="severityFilter !== 'critical'"></span>
+          <span>critical <span class="font-mono font-bold" x-text="findingsCounts.critical">0</span></span>
+        </button>
+
+        <button @click="severityFilter = severityFilter === 'major' ? 'all' : 'major'"
+                :disabled="!findingsCounts.major"
+                class="px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 transition
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+                :class="severityFilter === 'major'
+                        ? 'bg-orange-500 text-white shadow'
+                        : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60'">
+          <span class="w-2 h-2 rounded-full bg-orange-500 inline-block"
+                x-show="severityFilter !== 'major'"></span>
+          <span>major <span class="font-mono font-bold" x-text="findingsCounts.major">0</span></span>
+        </button>
+
+        <button @click="severityFilter = severityFilter === 'minor' ? 'all' : 'minor'"
+                :disabled="!findingsCounts.minor"
+                class="px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 transition
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+                :class="severityFilter === 'minor'
+                        ? 'bg-yellow-500 text-white shadow'
+                        : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/60'">
+          <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"
+                x-show="severityFilter !== 'minor'"></span>
+          <span>minor <span class="font-mono font-bold" x-text="findingsCounts.minor">0</span></span>
+        </button>
+
+        <button @click="severityFilter = severityFilter === 'suggestion' ? 'all' : 'suggestion'"
+                :disabled="!findingsCounts.suggestion"
+                class="px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 transition
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+                :class="severityFilter === 'suggestion'
+                        ? 'bg-blue-500 text-white shadow'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60'">
+          <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"
+                x-show="severityFilter !== 'suggestion'"></span>
+          <span>info <span class="font-mono font-bold" x-text="findingsCounts.suggestion">0</span></span>
+        </button>
+
+        <button x-show="severityFilter !== 'all'"
+                @click="severityFilter = 'all'"
+                class="px-2 py-1 rounded-full text-slate-500 hover:text-slate-700
+                       dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700
+                       inline-flex items-center gap-1 transition">
+          {{ ui.icon('x-mark', 'w-3 h-3') }} <span>解除</span>
+        </button>
+      </div>
+    </div>
+
+    {# ---------- 2 カラム: 左 進捗 (sticky) / 右 発見事項 ---------- #}
+    <div class="grid gap-6 md:grid-cols-5">
+
+      {# ────── 左カラム (2/5): 個別調査進捗 ────── #}
+      <div class="md:col-span-2">
+        <div class="md:sticky md:top-24 bg-white dark:bg-slate-800 rounded-2xl p-5
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h3 class="text-sm font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <span class="text-sky-500">{{ ui.icon('beaker', 'w-4 h-4') }}</span>
+            個別調査進捗
+            <span class="ml-auto text-xs font-mono font-normal text-slate-400"
+                  x-text="investigationProgress.length + ' 観点'"></span>
+          </h3>
+
+          <div class="space-y-3">
+            <template x-for="leader in investigationProgress" :key="leader.aspect">
+              <div class="p-2 rounded-lg transition"
+                   :class="(leader.progress || 0) >= 100
+                           ? 'bg-teal-50/60 dark:bg-teal-900/10'
+                           : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-base flex-shrink-0" x-text="leader.emoji || '🎭'"></span>
+                  <span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate flex-1"
+                        x-text="leader.aspect_label || leader.aspect"></span>
+                  <span class="text-xs font-mono text-slate-500 flex-shrink-0"
+                        x-text="(leader.findings_count || 0) + '件'"></span>
+                  <span x-show="(leader.progress || 0) >= 100"
+                        class="text-teal-500 inline-flex flex-shrink-0">
+                    {{ ui.icon('check-circle', 'w-3.5 h-3.5') }}
+                  </span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-500"
+                       :class="(leader.progress || 0) >= 100
+                               ? 'bg-teal-500'
+                               : 'bg-gradient-to-r from-sky-400 to-sky-500'"
+                       :style="'width: ' + Math.min(100, leader.progress || 0) + '%'"></div>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="!investigationProgress.length">
+              <div class="text-center py-6">
+                <div class="flex justify-center mb-2 text-slate-400">
+                  {{ ui.icon('beaker', 'w-8 h-8') }}
+                </div>
+                <p class="text-xs text-slate-400">調査開始待ち...</p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      {# ────── 右カラム (3/5): 発見事項リスト ────── #}
+      <div class="md:col-span-3">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h3 class="text-sm font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <span class="text-sky-500">{{ ui.icon('clipboard-list', 'w-4 h-4') }}</span>
+            発見事項
+            <span class="text-xs font-normal text-slate-400 font-mono">
+              <template x-if="severityFilter === 'all'">
+                <span x-text="findings.length + ' 件'"></span>
+              </template>
+              <template x-if="severityFilter !== 'all'">
+                <span x-text="filteredFindings.length + ' / ' + findings.length + ' 件'"></span>
+              </template>
+            </span>
+          </h3>
+
+          <div class="space-y-2 max-h-[640px] overflow-y-auto custom-scrollbar pr-1">
+            <template x-for="finding in filteredFindings" :key="finding.id">
+              <div class="p-3 rounded-xl border animate-slide-up transition"
+                   :class="severityClasses(finding.severity)">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                        :class="severityBadgeClasses(finding.severity)"
+                        x-text="finding.severity || 'suggestion'"></span>
+                  <span x-show="finding.aspect"
+                        class="text-xs px-2 py-0.5 rounded
+                               bg-slate-200 dark:bg-slate-600
+                               text-slate-600 dark:text-slate-300"
+                        x-text="finding.aspect"></span>
+                  <span x-show="finding.file_path"
+                        class="text-xs font-mono text-slate-500 dark:text-slate-400 truncate"
+                        x-text="finding.file_path +
+                                (finding.line_range
+                                  ? ':' + finding.line_range[0] + '-' + finding.line_range[1]
+                                  : '')"></span>
+                </div>
+                <div class="text-sm font-medium text-slate-800 dark:text-slate-200"
+                     x-text="finding.title || '(タイトルなし)'"></div>
+
+                <template x-if="finding.description || finding.suggestion">
+                  <details class="mt-2 group">
+                    <summary class="text-xs text-slate-500 dark:text-slate-400 cursor-pointer
+                                    hover:text-slate-700 dark:hover:text-slate-300
+                                    transition select-none inline-flex items-center gap-1">
+                      <span class="inline-block transition-transform group-open:rotate-90 inline-flex">{{ ui.icon('chevron-right', 'w-3 h-3') }}</span>
+                      詳細を見る
+                    </summary>
+                    <div class="mt-2 space-y-2 text-xs">
+                      <div x-show="finding.description">
+                        <div class="font-semibold text-slate-500 mb-0.5">説明:</div>
+                        <div class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap"
+                             x-text="finding.description"></div>
+                      </div>
+                      <div x-show="finding.suggestion">
+                        <div class="font-semibold text-slate-500 mb-0.5">推奨:</div>
+                        <div class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap"
+                             x-text="finding.suggestion"></div>
+                      </div>
+                    </div>
+                  </details>
+                </template>
+              </div>
+            </template>
+
+            <template x-if="!filteredFindings.length">
+              <div class="text-center py-8">
+                <div class="flex justify-center mb-2 text-slate-400 opacity-70">
+                  {{ ui.icon('inbox', 'w-8 h-8') }}
+                </div>
+                <p class="text-sm text-slate-400"
+                   x-text="severityFilter === 'all'
+                           ? 'まだ発見事項がありません'
+                           : 'このフィルターに該当する発見事項はありません'"></p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ---------- 相互質問ログ (常に展開表示) ---------- #}
+    <details x-show="crossQuestions.length > 0"
+             open
+             class="group bg-white dark:bg-slate-800 rounded-2xl
+                    border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <summary class="p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition
+                      flex items-center gap-2">
+        <span class="text-sky-500">{{ ui.icon('chat-bubble', 'w-4 h-4') }}</span>
+        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">相互質問</h3>
+        <span class="text-xs text-slate-400 font-mono"
+              x-text="'(' + crossQuestions.length + ')'"></span>
+        <span class="ml-auto text-slate-400 transition-transform group-open:rotate-180 inline-flex">
+          {{ ui.icon('chevron-down', 'w-4 h-4') }}
+        </span>
+      </summary>
+      <div class="px-4 pb-4 space-y-4">
+        <template x-for="qa in crossQuestions" :key="qa.id">
+          <div class="space-y-2 animate-slide-up">
+            {# 質問 #}
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full
+                          bg-blue-100 dark:bg-blue-900/30
+                          flex items-center justify-center">
+                <span x-text="qa.questioner_emoji || '🎭'"></span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs text-slate-500 mb-1 inline-flex items-center gap-1">
+                  <span x-text="qa.questioner_name || qa.questioner"></span>
+                  {{ ui.icon('arrow-right', 'w-3 h-3') }}
+                  <span x-text="qa.target_name || qa.target"></span>
+                </div>
+                <div class="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20
+                            text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap"
+                     x-text="qa.question || ''"></div>
+              </div>
+            </div>
+
+            {# 回答 #}
+            <div x-show="qa.answer" class="flex items-start gap-3 pl-11">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full
+                          bg-green-100 dark:bg-green-900/30
+                          flex items-center justify-center">
+                <span x-text="qa.target_emoji || '🎭'"></span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs text-slate-500 mb-1"
+                     x-text="qa.target_name || qa.target"></div>
+                <div class="p-2 rounded-xl bg-green-50 dark:bg-green-900/20
+                            text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap"
+                     x-text="qa.answer || ''"></div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </details>
+
+    {# ---------- アクションバー ---------- #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6
+                border-t border-slate-200 dark:border-slate-700 mt-6">
+      <button @click="step = 1"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl
+                     text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center justify-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>入力を修正</span>
+      </button>
+
+      <button @click="advanceStep(3)"
+              :disabled="!investigationComplete"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl text-white font-medium
+                     bg-gradient-to-r from-sky-600 to-cyan-600
+                     hover:from-sky-700 hover:to-cyan-700
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition shadow-lg shadow-sky-200 dark:shadow-sky-900/50
+                     flex items-center justify-center gap-2">
+        <span x-show="investigationComplete" class="inline-flex items-center gap-1">
+          {{ ui.icon('flag', 'w-4 h-4') }} 議論に進む
+        </span>
+        <span x-show="!investigationComplete" class="inline-flex items-center gap-1">
+          {{ ui.icon('cog', 'w-4 h-4') }} 調査進行中...
+        </span>
+        <span x-show="investigationComplete" class="inline-flex">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+      </button>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 3: 全体会議 (以前の Step 4)
+     ============================================================ #}
+  <div x-show="step === 3" x-transition.opacity>
+
+    {# モバイル上部固定バー (md未満) #}
+    <div class="md:hidden fixed top-16 left-0 right-0 z-30
+                bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
+                border-b border-slate-200 dark:border-slate-700
+                px-4 py-2">
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-xs text-slate-500">
+          Round <span x-text="currentRound">0</span> / <span x-text="totalRounds">3</span>
+        </div>
+        <div class="text-sm font-mono font-bold"
+             :class="{
+               'text-teal-600 dark:text-green-400': timePressure === 'relaxed',
+               'text-yellow-600 dark:text-yellow-400': timePressure === 'moderate',
+               'text-orange-600 dark:text-orange-400': timePressure === 'urgent',
+               'text-red-600 dark:text-red-400 animate-pulse': timePressure === 'critical',
+             }"
+             x-text="formatTime(remainingSec)">0:00</div>
+      </div>
+      <div class="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div class="h-full transition-all duration-1000 ease-linear"
+             :class="{
+               'bg-teal-500': timePressure === 'relaxed',
+               'bg-yellow-500': timePressure === 'moderate',
+               'bg-orange-500': timePressure === 'urgent',
+               'bg-red-500': timePressure === 'critical',
+             }"
+             :style="'width: ' + Math.max(0, Math.min(100, (remainingSec / Math.max(1, timeLimit)) * 100)) + '%'"></div>
+      </div>
+    </div>
+
+    {# メインレイアウト #}
+    <div class="flex gap-6 md:pt-0 pt-16 md:pb-0 pb-24">
+
+      {# ────── サイドバー (デスクトップのみ) ────── #}
+      <aside class="w-72 flex-shrink-0 space-y-4 hidden md:block">
+
+        {# タイマー #}
+        {% include "components/timer.html" %}
+
+        {# ラウンド情報 #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            ラウンド情報
+          </h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500">ラウンド</span>
+              <span class="font-medium">
+                <span x-text="currentRound">0</span> / <span x-text="totalRounds">3</span>
+              </span>
+            </div>
+            <div class="flex justify-between items-center" x-show="currentPhase">
+              <span class="text-slate-500">フェーズ</span>
+              <span class="text-xs px-2 py-0.5 rounded-full"
+                    :class="phaseColorClass"
+                    x-text="currentPhase"></span>
+            </div>
+            <div class="flex justify-between" x-show="currentPattern">
+              <span class="text-slate-500">パターン</span>
+              <span class="font-mono text-xs" x-text="currentPattern"></span>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700
+                      text-xs text-slate-400 space-y-1">
+            <div>R1: 課題報告</div>
+            <div>R2: 深掘り</div>
+            <div>R3: 合意形成</div>
+          </div>
+        </div>
+
+        {# 参加パートリーダー #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            参加パートリーダー
+          </h4>
+          <div class="space-y-2">
+            <template x-for="agent in meetingAgents" :key="agent.role_id">
+              <div x-data="{ get status() { return $root.getAgentStatus(agent.role_id); } }">
+                {% include "components/agent_badge.html" %}
+              </div>
+            </template>
+            <template x-if="!meetingAgents.length">
+              <p class="text-xs text-slate-400">参加者情報取得中...</p>
+            </template>
+          </div>
+        </div>
+
+        {# 発見サマリー (Review 固有) #}
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4
+                    border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h4 class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+            発見サマリー
+          </h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                <span class="text-slate-600 dark:text-slate-400">Critical</span>
+              </span>
+              <span class="font-mono font-medium" x-text="findingsCounts.critical">0</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                <span class="text-slate-600 dark:text-slate-400">Major</span>
+              </span>
+              <span class="font-mono font-medium" x-text="findingsCounts.major">0</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                <span class="text-slate-600 dark:text-slate-400">Minor</span>
+              </span>
+              <span class="font-mono font-medium" x-text="findingsCounts.minor">0</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                <span class="text-slate-600 dark:text-slate-400">Suggestion</span>
+              </span>
+              <span class="font-mono font-medium" x-text="findingsCounts.suggestion">0</span>
+            </div>
+          </div>
+        </div>
+
+        {# 中断ボタン #}
+        <button @click="confirmAbort()"
+                class="w-full py-2 px-4 rounded-xl text-red-600 dark:text-red-400
+                       bg-red-50 dark:bg-red-900/20
+                       border border-red-200 dark:border-red-800
+                       hover:bg-red-100 dark:hover:bg-red-900/40
+                       transition text-sm font-medium inline-flex items-center justify-center gap-1">
+          {{ ui.icon('stop-circle', 'w-4 h-4') }} 中断する
+        </button>
+      </aside>
+
+      {# ────── チャットエリア ────── #}
+      <div class="flex-1 flex flex-col min-w-0 relative
+                  h-[calc(100vh-200px)] md:h-[calc(100vh-180px)]">
+
+        {# チャットヘッダー (デスクトップのみ) #}
+        <div class="hidden md:flex items-center justify-between px-4 py-3
+                    bg-white dark:bg-slate-800
+                    border border-slate-200 dark:border-slate-700
+                    rounded-t-xl">
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">
+              Round <span x-text="currentRound">0</span>
+            </span>
+            <span x-show="currentPhase"
+                  class="text-xs px-2 py-0.5 rounded-full"
+                  :class="phaseColorClass"
+                  x-text="currentPhase"></span>
+            <span x-show="currentPattern"
+                  class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700
+                         text-slate-600 dark:text-slate-300 font-mono"
+                  x-text="currentPattern"></span>
+          </div>
+          <div class="text-xs text-slate-400">
+            <span x-text="stats.utteranceCount">0</span> 発言
+          </div>
+        </div>
+
+        {# メッセージ一覧 #}
+        <div x-ref="chatContainer"
+             @scroll="handleScroll()"
+             role="log"
+             aria-live="polite"
+             aria-relevant="additions"
+             aria-label="レビュー会議の発言ログ"
+             class="flex-1 overflow-y-auto p-4 space-y-1
+                    bg-slate-50 dark:bg-slate-900/50
+                    md:border-x md:border-b border-slate-200 dark:border-slate-700
+                    md:rounded-b-xl custom-scrollbar">
+
+          <template x-for="item in chatItems" :key="item.id">
+            <div>
+              {% include "components/chat_bubble.html" %}
+            </div>
+          </template>
+
+          {# タイピングインジケーター #}
+          <template x-if="isAgentThinking && thinkingAgent">
+            <div class="flex items-center gap-3 mb-4 animate-fade-in">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800
+                          flex items-center justify-center text-xl">
+                <span x-text="thinkingAgent.emoji || '🎭'"></span>
+              </div>
+              <div class="px-4 py-3 rounded-2xl rounded-tl-sm
+                          bg-slate-100 dark:bg-slate-700">
+                <div class="flex items-center gap-1">
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 0ms"></span>
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 150ms"></span>
+                  <span class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style="animation-delay: 300ms"></span>
+                </div>
+              </div>
+              <span class="text-xs text-slate-400"
+                    x-text="(thinkingAgent.name || '?') + ' が考え中...'"></span>
+            </div>
+          </template>
+
+          {# 空状態 #}
+          <template x-if="!chatItems.length && !isAgentThinking">
+            <div class="flex flex-col items-center justify-center py-16 text-center">
+              <div class="inline-flex items-center gap-3 px-6 py-4 rounded-2xl
+                          bg-white dark:bg-slate-800 shadow-sm
+                          border border-slate-200 dark:border-slate-700">
+                <svg class="animate-spin h-5 w-5 text-sky-600" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10"
+                          stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-sm text-slate-600 dark:text-slate-400">
+                  会議の準備中...
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        {# "最新へ" ボタン #}
+        <div x-show="!isAtBottom && chatItems.length"
+             x-transition
+             class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
+          <button @click="scrollToBottom()"
+                  class="px-4 py-2 rounded-full bg-sky-600 text-white text-sm
+                         shadow-lg hover:bg-sky-700 transition
+                         flex items-center gap-1">
+            {{ ui.icon('arrow-down', 'w-3.5 h-3.5') }}
+            <span>最新へ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# モバイル下部固定バー #}
+    <div class="md:hidden fixed bottom-0 left-0 right-0 z-30
+                bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
+                border-t border-slate-200 dark:border-slate-700
+                px-4 py-2 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 text-xs text-slate-500 overflow-hidden">
+        <span class="flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-red-500"></span>
+          <span x-text="findingsCounts.critical">0</span>
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+          <span x-text="findingsCounts.major">0</span>
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+          <span x-text="findingsCounts.minor">0</span>
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          <span x-text="findingsCounts.suggestion">0</span>
+        </span>
+      </div>
+      <button @click="confirmAbort()"
+              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs
+                     text-red-600 dark:text-red-400
+                     bg-red-50 dark:bg-red-900/20
+                     border border-red-200 dark:border-red-800
+                     hover:bg-red-100 dark:hover:bg-red-900/40 transition inline-flex items-center gap-1">
+        {{ ui.icon('stop-circle', 'w-3.5 h-3.5') }} 中断
+      </button>
+    </div>
+
+    {# Step 3 下部アクションバー (以前の Step 4 アクションバー) #}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6
+                border-t border-slate-200 dark:border-slate-700 mt-6">
+      <button @click="advanceStep(2)"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl
+                     text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center justify-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>計画を確認</span>
+      </button>
+
+      <button @click="goToResults()"
+              :disabled="!resultReady"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl text-white font-medium
+                     bg-gradient-to-r from-teal-600 to-cyan-600
+                     hover:from-teal-700 hover:to-cyan-700
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition shadow-lg shadow-cyan-200 dark:shadow-cyan-900/50
+                     flex items-center justify-center gap-2">
+        <span x-show="resultReady" class="inline-flex items-center gap-1">
+          {{ ui.icon('document', 'w-4 h-4') }} 結果に進む
+        </span>
+        <span x-show="!resultReady" class="inline-flex items-center gap-1">
+          {{ ui.icon('film', 'w-4 h-4') }} 会議進行中...
+        </span>
+        <span x-show="resultReady" class="inline-flex">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+      </button>
+    </div>
+  </div>
+
+  {# ============================================================
+     Step 4: 結果表示 (以前の Step 5)
+     ============================================================ #}
+  <div x-show="step === 4" x-transition.opacity class="space-y-6">
+
+    {# 完了ヘッダー #}
+    <div class="text-center py-2 animate-fade-in">
+      <h2 class="text-2xl md:text-3xl font-bold inline-flex items-center gap-3
+                 bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-500
+                 bg-clip-text text-transparent">
+        <span class="text-teal-500">{{ ui.icon('check-circle', 'w-7 h-7') }}</span>
+        レビュー完了!
+      </h2>
+    </div>
+
+    {# 統計カード #}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="text-center p-4 rounded-xl
+                  bg-blue-50 dark:bg-blue-900/20
+                  border border-blue-200 dark:border-blue-800
+                  animate-count-up stagger-1">
+        <div class="flex justify-center mb-1 text-blue-500">{{ ui.icon('clock', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400"
+             x-text="formatTime(result?.statistics?.duration_sec || 0)">0:00</div>
+        <div class="text-xs text-slate-500 mt-1">所要時間</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-green-50 dark:bg-green-900/20
+                  border border-green-200 dark:border-green-800
+                  animate-count-up stagger-2">
+        <div class="flex justify-center mb-1 text-teal-500">{{ ui.icon('folder', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-teal-600 dark:text-green-400"
+             x-text="result?.statistics?.files_reviewed ?? '-'">0</div>
+        <div class="text-xs text-slate-500 mt-1">対象ファイル</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-cyan-50 dark:bg-cyan-900/20
+                  border border-cyan-200 dark:border-cyan-800
+                  animate-count-up stagger-3">
+        <div class="flex justify-center mb-1 text-cyan-500">{{ ui.icon('clipboard-list', 'w-6 h-6') }}</div>
+        <div class="text-2xl font-bold font-mono text-cyan-600 dark:text-cyan-400"
+             x-text="result?.statistics?.total_findings ?? findings.length">0</div>
+        <div class="text-xs text-slate-500 mt-1">指摘件数</div>
+      </div>
+
+      <div class="text-center p-4 rounded-xl
+                  bg-amber-50 dark:bg-amber-900/20
+                  border border-amber-200 dark:border-amber-800
+                  animate-count-up stagger-4">
+        <div class="text-xs text-slate-500 mb-1 font-medium">深刻度内訳</div>
+        <div class="flex items-center justify-center gap-3 mt-2 font-mono text-sm">
+          <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+            <span x-text="findingsCounts.critical">0</span>
+          </span>
+          <span class="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
+            <span x-text="findingsCounts.major">0</span>
+          </span>
+          <span class="inline-flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span>
+            <span x-text="findingsCounts.minor">0</span>
+          </span>
+        </div>
+        <div class="text-xs text-slate-500 mt-1">重要度別</div>
+      </div>
+    </div>
+
+    {# タブ切替 #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl
+                border border-slate-200 dark:border-slate-700
+                shadow-sm overflow-hidden">
+      {# タブヘッダー #}
+      <div class="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+        <template x-for="tab in availableTabs" :key="tab.id">
+          <button @click="activeTab = tab.id"
+                  class="flex-1 min-w-max px-4 py-3 text-sm font-medium
+                         transition-colors border-b-2 whitespace-nowrap"
+                  :class="{
+                    'border-sky-600 text-sky-600 dark:text-sky-400 dark:border-sky-400 bg-sky-50/50 dark:bg-sky-900/10':
+                      activeTab === tab.id,
+                    'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300':
+                      activeTab !== tab.id,
+                  }"
+                  x-text="tab.label"></button>
+        </template>
+      </div>
+
+      {# タブコンテンツ #}
+      <div class="p-6 max-h-[600px] overflow-y-auto custom-scrollbar">
+        {# レポート #}
+        <div x-show="activeTab === 'report'"
+             class="prose-orchestra"
+             x-html="renderMarkdown(result?.files?.report || '')"></div>
+
+        {# 修正指示書 #}
+        <div x-show="activeTab === 'vibe_prompt'">
+          <div class="flex justify-end mb-4">
+            <button @click="copyVibePrompt()"
+                    :disabled="!result?.files?.vibe_prompt"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium
+                           bg-sky-100 dark:bg-sky-900/30
+                           text-sky-700 dark:text-sky-300
+                           hover:bg-sky-200 dark:hover:bg-sky-900/50
+                           disabled:opacity-50 disabled:cursor-not-allowed
+                           transition flex items-center gap-1"
+                    x-text="copied ? 'コピー済み' : 'クリップボードにコピー'"></button>
+          </div>
+          <template x-if="result?.files?.vibe_prompt">
+            <div class="prose-orchestra"
+                 x-html="renderMarkdown(result.files.vibe_prompt)"></div>
+          </template>
+          <template x-if="!result?.files?.vibe_prompt">
+            <div class="text-center text-sm text-slate-400 py-8">
+              修正指示書はありません
+            </div>
+          </template>
+        </div>
+
+        {# 会議録 #}
+        <div x-show="activeTab === 'conversation'"
+             class="prose-orchestra"
+             x-html="renderMarkdown(result?.files?.conversation || '')"></div>
+
+        {# 評価 #}
+        <div x-show="activeTab === 'evaluation'"
+             class="prose-orchestra"
+             x-html="renderMarkdown(result?.files?.evaluation || '')"></div>
+      </div>
+    </div>
+
+    {# アクションバー #}
+    <div class="flex flex-wrap items-center justify-center gap-3 pt-4">
+      {# 修正指示書コピー #}
+      <button @click="copyVibePrompt()"
+              :disabled="!result?.files?.vibe_prompt"
+              class="px-6 py-3 rounded-xl
+                     text-teal-600 dark:text-green-400
+                     bg-green-50 dark:bg-green-900/20
+                     border border-green-200 dark:border-green-800
+                     hover:bg-green-100 dark:hover:bg-green-900/40
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition flex items-center gap-2"
+              x-text="copied ? 'コピー済み' : '修正指示書をコピー'"></button>
+
+      {# 会議に戻る #}
+      <button @click="backToMeeting()"
+              class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                     bg-slate-100 dark:bg-slate-700
+                     hover:bg-slate-200 dark:hover:bg-slate-600
+                     transition flex items-center gap-2">
+        {{ ui.icon('arrow-left', 'w-4 h-4') }}
+        <span>会議に戻る</span>
+      </button>
+
+      {# ダウンロード #}
+      <div x-data="{ downloadOpen: false }" class="relative">
+        <button @click="downloadOpen = !downloadOpen"
+                class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                       bg-slate-100 dark:bg-slate-700
+                       hover:bg-slate-200 dark:hover:bg-slate-600
+                       transition flex items-center gap-2">
+          {{ ui.icon('arrow-down', 'w-4 h-4') }}
+          <span>ダウンロード</span>
+          <span class="inline-flex">
+            <template x-if="downloadOpen">{{ ui.icon('chevron-up', 'w-3 h-3') }}</template>
+            <template x-if="!downloadOpen">{{ ui.icon('chevron-down', 'w-3 h-3') }}</template>
+          </span>
+        </button>
+
+        <div x-show="downloadOpen"
+             x-cloak
+             @click.away="downloadOpen = false"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 -translate-y-2"
+             class="absolute top-full mt-2 right-0 w-56
+                    bg-white dark:bg-slate-800 rounded-xl shadow-lg
+                    border border-slate-200 dark:border-slate-700
+                    overflow-hidden z-40">
+          <button @click="downloadFile('report'); downloadOpen = false"
+                  class="w-full text-left px-4 py-2 text-sm inline-flex items-center gap-2
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            {{ ui.icon('document', 'w-4 h-4') }} レポート (.md)
+          </button>
+          <button @click="downloadFile('vibe_prompt'); downloadOpen = false"
+                  class="w-full text-left px-4 py-2 text-sm inline-flex items-center gap-2
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            {{ ui.icon('wrench', 'w-4 h-4') }} 修正指示書 (.md)
+          </button>
+          <div class="border-t border-slate-200 dark:border-slate-700"></div>
+          <button @click="downloadFile('all'); downloadOpen = false"
+                  class="w-full text-left px-4 py-2 text-sm font-medium inline-flex items-center gap-2
+                         text-sky-600 dark:text-sky-400
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            {{ ui.icon('cube', 'w-4 h-4') }} 全ファイル (.zip)
+          </button>
+        </div>
+      </div>
+
+      {# ホームへ #}
+      <a href="/"
+         class="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-300
+                bg-slate-100 dark:bg-slate-700
+                hover:bg-slate-200 dark:hover:bg-slate-600
+                transition flex items-center gap-2">
+        <span>{{ ui.icon('home', 'w-4 h-4') }}</span>
+        <span>ホームへ</span>
+      </a>
+    </div>
+  </div>
+
+  {# ============================================================
+     フォルダピッカーモーダル (Review UI: フォルダ選択)
+     既存の Review ページのカードデザイン (bg-white dark:bg-slate-800 /
+     rounded-2xl / border border-slate-200 dark:border-slate-700) を踏襲。
+     ============================================================ #}
+  <div x-show="folderPicker.open"
+       x-transition.opacity
+       @keydown.escape.window="closeFolderPicker()"
+       class="fixed inset-0 z-50 flex items-center justify-center
+              bg-slate-900/60 backdrop-blur-sm p-4"
+       x-cloak>
+    <div @click.outside="closeFolderPicker()"
+         class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl
+                w-full max-w-2xl max-h-[85vh] flex flex-col
+                border border-slate-200 dark:border-slate-700
+                animate-fade-in">
+
+      {# ---------- ヘッダ (既存カードヘッダのトーンに合わせる) ---------- #}
+      <div class="flex items-center justify-between px-6 py-4
+                  border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-base font-bold text-slate-800 dark:text-slate-200
+                   inline-flex items-center gap-2">
+          <span class="text-sky-500">{{ ui.icon('folder-open', 'w-5 h-5') }}</span>
+          レビュー対象フォルダを選択
+        </h3>
+        <button @click="closeFolderPicker()"
+                type="button"
+                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200
+                       transition p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+          {{ ui.icon('x-mark', 'w-5 h-5') }}
+        </button>
+      </div>
+
+      {# ---------- 現在パス + ナビゲーション ---------- #}
+      <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-700
+                  bg-slate-50 dark:bg-slate-900/30">
+        <div class="flex items-center gap-2">
+          <button @click="browseParent()"
+                  :disabled="!folderPicker.parentPath"
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium
+                         bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600
+                         text-slate-700 dark:text-slate-200
+                         hover:bg-slate-100 dark:hover:bg-slate-600
+                         disabled:opacity-40 disabled:cursor-not-allowed
+                         transition inline-flex items-center gap-1 whitespace-nowrap"
+                  title="親フォルダへ">
+            {{ ui.icon('arrow-up', 'w-3.5 h-3.5') }} 上へ
+          </button>
+          <div class="relative flex-1">
+            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">{{ ui.icon('folder', 'w-4 h-4') }}</span>
+            <input type="text"
+                   x-model="folderPicker.currentPath"
+                   @keydown.enter="browseFolder(folderPicker.currentPath)"
+                   placeholder="パスを入力して Enter で移動"
+                   class="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs font-mono
+                          border border-slate-300 dark:border-slate-600
+                          bg-white dark:bg-slate-800
+                          text-slate-900 dark:text-slate-100
+                          focus:ring-2 focus:ring-sky-500 focus:border-transparent transition">
+          </div>
+          <button @click="browseFolder(folderPicker.currentPath)"
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium
+                         bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600
+                         text-slate-700 dark:text-slate-200
+                         hover:bg-slate-200 dark:hover:bg-slate-600
+                         transition whitespace-nowrap">
+            移動
+          </button>
+        </div>
+      </div>
+
+      {# ---------- エラー表示 ---------- #}
+      <div x-show="folderPicker.error"
+           class="mx-6 mt-3 px-3 py-2 rounded-lg text-xs
+                  bg-red-50 dark:bg-red-900/20
+                  border border-red-200 dark:border-red-800
+                  text-red-700 dark:text-red-300"
+           x-text="folderPicker.error"></div>
+
+      {# ---------- クイックパス (path 未指定時のみ表示) ---------- #}
+      <div x-show="folderPicker.quickPaths.length > 0"
+           class="px-6 py-3 border-b border-slate-200 dark:border-slate-700">
+        <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 inline-flex items-center gap-1.5">
+          <span class="text-amber-500">{{ ui.icon('sparkles', 'w-3.5 h-3.5') }}</span>
+          よく使う場所
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="qp in folderPicker.quickPaths" :key="qp.path">
+            <button @click="browseFolder(qp.path)"
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium
+                           bg-sky-50 dark:bg-sky-900/30
+                           border border-sky-200 dark:border-sky-800
+                           text-sky-700 dark:text-sky-300
+                           hover:bg-sky-100 dark:hover:bg-sky-900/50
+                           transition inline-flex items-center gap-1.5">
+              {{ ui.icon('folder', 'w-3.5 h-3.5') }}
+              <span x-text="qp.label"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      {# ---------- 子ディレクトリリスト ---------- #}
+      <div class="flex-1 overflow-y-auto px-6 py-3 min-h-[240px] custom-scrollbar">
+        <div x-show="folderPicker.loading"
+             class="text-center text-slate-500 py-12">
+          <svg class="animate-spin h-6 w-6 mx-auto mb-2 text-sky-500" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10"
+                    stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span class="text-xs">読み込み中...</span>
+        </div>
+        <div x-show="!folderPicker.loading && folderPicker.entries.length === 0 && folderPicker.quickPaths.length === 0"
+             class="text-center text-slate-400 py-12 text-xs">
+          <div class="mb-2 inline-flex text-slate-300 dark:text-slate-600">{{ ui.icon('folder-open', 'w-8 h-8') }}</div>
+          <div>このフォルダには子フォルダがありません</div>
+        </div>
+        <ul x-show="!folderPicker.loading && folderPicker.entries.length > 0"
+            class="space-y-0.5">
+          <template x-for="entry in folderPicker.entries" :key="entry.path">
+            <li>
+              <button @click="browseFolder(entry.path)"
+                      type="button"
+                      class="w-full text-left px-3 py-2 rounded-lg
+                             hover:bg-slate-100 dark:hover:bg-slate-700/60
+                             transition inline-flex items-center gap-2 text-sm
+                             text-slate-700 dark:text-slate-200
+                             group">
+                <span class="text-sky-500 group-hover:text-sky-600 transition">{{ ui.icon('folder', 'w-4 h-4') }}</span>
+                <span x-text="entry.name" class="font-mono"></span>
+              </button>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      {# ---------- フッタ: 選択 + キャンセル ---------- #}
+      <div class="flex items-center justify-between gap-3 px-6 py-4
+                  border-t border-slate-200 dark:border-slate-700
+                  bg-slate-50 dark:bg-slate-900/30">
+        <div class="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 font-mono"
+             x-text="folderPicker.currentPath || 'パスを選択してください'"></div>
+        <button @click="closeFolderPicker()"
+                type="button"
+                class="px-4 py-2 rounded-lg text-sm font-medium
+                       bg-white dark:bg-slate-700
+                       border border-slate-300 dark:border-slate-600
+                       text-slate-700 dark:text-slate-200
+                       hover:bg-slate-100 dark:hover:bg-slate-600
+                       transition whitespace-nowrap">
+          キャンセル
+        </button>
+        <button @click="selectCurrentFolder()"
+                :disabled="!folderPicker.currentPath"
+                type="button"
+                class="px-5 py-2 rounded-lg text-sm text-white font-medium
+                       bg-sky-600 hover:bg-sky-700
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       transition inline-flex items-center gap-1.5 whitespace-nowrap">
+          {{ ui.icon('check', 'w-4 h-4') }} このフォルダを選択
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+  /**
+   * Code Review ページの Alpine.js コンポーネント。
+   * Step 1 (入力設定) を実装。Step 2-5 は次フェーズで拡張予定。
+   */
+  function reviewPage() {
+    const STORAGE_KEY_PATH = 'review:targetPath';
+    const STORAGE_KEY_SETTINGS = 'review:settings';
+    const DEFAULT_SETTINGS = {
+      plannerModel: 'gpt-5.4',
+      conductorModel: 'gpt-4.1',
+      synthModel: 'gpt-5.4',
+      timeLimit: 600,
+      maxAgents: 6,
+      focus: 'all',
+      ignorePatterns: '',
+      // ユーザーが候補 AI をクリックして選択した role_id のリスト。
+      // 空なら自動選定。
+      preferredRoleIds: [],
+    };
+
+    return {
+      // === ステップ ===
+      step: 1,
+      maxStepReached: 1,  // 到達済みの最大 step (step_indicator クリック遷移制御)
+      steps: [
+        { num: 1, label: '入力' },
+        { num: 2, label: '計画' },
+        { num: 3, label: '議論' },
+        { num: 4, label: '結果' },
+      ],
+
+      // === フォーム state ===
+      targetPath: '',
+      pathError: '',
+      settings: { ...DEFAULT_SETTINGS },
+
+      // === ローディング / API 応答 ===
+      scanLoading: false,
+      scanResult: null,
+      partLeaders: [],
+      remainingQuota: 10000,
+      estimatedRequests: 60,
+
+      // === フォルダピッカー (UI モーダル) ===
+      folderPicker: {
+        open: false,
+        loading: false,
+        currentPath: '',
+        parentPath: null,
+        entries: [],
+        quickPaths: [],
+        error: '',
+      },
+
+      // === Step 3: SSE / 進捗 / 発見 / 質問 ===
+      sse: null,
+      investigationLoading: false,
+      investigationComplete: false,  // true = meeting_start SSE 受信済み (会議に進める)
+      investigationProgress: [],   // [{aspect, aspect_label, emoji, progress, findings_count}]
+      findings: [],                // [{id, severity, title, description, file_path, line_range, suggestion, aspect}]
+      crossQuestions: [],          // [{id, questioner, target, ..._emoji, ..._name, question, answer}]
+      findingsCounts: { critical: 0, major: 0, minor: 0, suggestion: 0 },
+      severityFilter: 'all',       // Step 2 findings フィルター: 'all' | 'critical' | 'major' | 'minor' | 'suggestion'
+
+      // Step 2 サマリー用 computed
+      get filteredFindings() {
+        if (this.severityFilter === 'all') return this.findings;
+        return this.findings.filter(
+          (f) => (f.severity || 'suggestion') === this.severityFilter
+        );
+      },
+      get completedLeadersCount() {
+        return (this.investigationProgress || [])
+          .filter((l) => (l.progress || 0) >= 100).length;
+      },
+
+      // === Step 4: 全体会議 ===
+      meetingAgents: [],           // 参加パートリーダー (role_id重複除去)
+      chatItems: [],               // { id, type, ... } の統合配列
+      utterances: [],
+      stats: { utteranceCount: 0, totalTokens: 0, convergence: 0 },
+      currentRound: 0,
+      totalRounds: 3,
+      currentPhase: '',
+      currentPattern: '',
+      agentStatuses: {},           // { role_id: 'speaking'|'waiting'|'done' }
+
+      // タイマー (components/timer.html が要求)
+      remainingSec: 0,
+      timeLimit: 0,
+      timePressure: 'relaxed',
+      timerInterval: null,
+
+      // スクロール / タイピング
+      isAtBottom: true,
+      isAgentThinking: false,
+      thinkingAgent: null,
+
+      // === Step 5: 結果 ===
+      result: null,          // { session_id, files, chain, hypotheses, statistics }
+      resultReady: false,    // true = Step 4 チャットに 「結果を見る」 ボタンを表示
+      activeTab: 'report',   // 'report' | 'vibe_prompt' | 'conversation' | 'evaluation'
+      copied: false,         // クリップボードコピーの成功フラグ
+
+      // === 選択肢定義 ===
+      focusModes: [
+        { id: 'all', icon: '🔍', label: '全体',
+          description: '6観点すべてを均等にレビューします',
+          highlights: ['algorithm','reproducibility','performance','structure','readability','results'] },
+        { id: 'pre_submission', icon: '📝', label: '投稿前',
+          description: '論文投稿前チェック: 再現性・結果整合性を重点的に',
+          highlights: ['reproducibility','results'] },
+        { id: 'performance', icon: '⚡', label: '性能',
+          description: 'ボトルネック・メモリ・並列化を重点的に',
+          highlights: ['performance'] },
+        { id: 'structure', icon: '🏗️', label: '構造',
+          description: 'モジュール分割・DRY・SOLIDを重点的に',
+          highlights: ['structure'] },
+        { id: 'handover', icon: '🤝', label: '引き継ぎ',
+          description: '可読性・ドキュメント・命名を重点的に',
+          highlights: ['readability'] },
+        { id: 'algorithm', icon: '🧮', label: 'アルゴリズム',
+          description: '数式対応・境界条件・数値安定性を重点的に',
+          highlights: ['algorithm'] },
+      ],
+
+      reviewAspects: [
+        { aspect: 'algorithm',       label: 'アルゴリズム', emoji: '🧮', role: '理論屋' },
+        { aspect: 'reproducibility', label: '再現性',       emoji: '🔬', role: '実験屋' },
+        { aspect: 'performance',     label: '性能',         emoji: '🤖', role: '実装屋' },
+        { aspect: 'structure',       label: '構造',         emoji: '📐', role: '設計リーダー' },
+        { aspect: 'readability',     label: '可読性',       emoji: '📝', role: '可読性LD' },
+        { aspect: 'results',         label: '結果検証',     emoji: '🔬', role: '実験屋' },
+      ],
+
+      // 全ロール (デフォルト + カスタム) を使用率降順で保持。init で埋める。
+      availableRoles: [],
+
+      // ================================================================
+      // Computed
+      // ================================================================
+
+      get isPathValid() {
+        return this.targetPath.trim().length > 0 && !this.pathError;
+      },
+
+      get currentFocusMode() {
+        return this.focusModes.find((m) => m.id === this.settings.focus);
+      },
+
+      isAspectHighlighted(aspect) {
+        const mode = this.currentFocusMode;
+        return mode ? mode.highlights.includes(aspect) : false;
+      },
+
+      /** フェーズ名 → バッジの Tailwind クラス */
+      get phaseColorClass() {
+        const map = {
+          diverge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+          deepen: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+          converge: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+        };
+        return map[this.currentPhase] ||
+               'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300';
+      },
+
+      /** Step 5 のタブ定義 */
+      get availableTabs() {
+        return [
+          { id: 'report',       label: '📄 レポート' },
+          { id: 'vibe_prompt',  label: '🔧 修正指示書' },
+          { id: 'conversation', label: '💬 会議録' },
+          { id: 'evaluation',   label: '📊 評価' },
+        ];
+      },
+
+      // ================================================================
+      // Lifecycle
+      // ================================================================
+
+      async init() {
+        this.restoreFromStorage();
+        await Promise.all([
+          this.loadHealth(),
+          this.loadRoles(),
+        ]);
+
+        // URL query ``?load=`` があれば履歴から復元
+        const params = new URLSearchParams(window.location.search);
+        const loadId = params.get('load');
+        if (loadId) {
+          await this.loadFromSession(loadId);
+        }
+      },
+
+      /**
+       * 全ロール (デフォルト + カスタム) を使用率降順でロードする。
+       * Step 1 の右カラムで候補ロール一覧を見せるために使用。
+       */
+      async loadRoles() {
+        try {
+          const res = await fetch('/api/roles');
+          if (!res.ok) return;
+          const roles = await res.json();
+          this.availableRoles = roles.slice().sort((a, b) => {
+            const sa = a?.stats?.session_count ?? 0;
+            const sb = b?.stats?.session_count ?? 0;
+            if (sb !== sa) return sb - sa;
+            return (a.id || '').localeCompare(b.id || '');
+          });
+          this._cleanupPreferredRoleIds();
+        } catch (e) {
+          console.warn('Failed to load roles:', e);
+        }
+      },
+
+      // 候補 AI をクリックで選択 / 選択解除する。
+      // maxAgents を超える場合は自動で maxAgents を +1 (上限 8)。
+      togglePreferredRole(roleId) {
+        if (!roleId) return;
+        const MAX_CAP = 8;
+        const list = Array.isArray(this.settings.preferredRoleIds)
+          ? [...this.settings.preferredRoleIds]
+          : [];
+        const idx = list.indexOf(roleId);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+        } else {
+          if (list.length >= MAX_CAP) {
+            toast('選択できるのは最大 ' + MAX_CAP + ' 人までです', 'warning');
+            return;
+          }
+          list.push(roleId);
+          if (list.length > this.settings.maxAgents) {
+            this.settings.maxAgents = Math.min(list.length, MAX_CAP);
+          }
+        }
+        this.settings.preferredRoleIds = list;
+        this.saveToStorage();
+      },
+
+      // 選択済み優先ロールを全解除。
+      clearPreferredRoles() {
+        this.settings.preferredRoleIds = [];
+        this.saveToStorage();
+      },
+
+      // availableRoles に存在しない role_id を preferredRoleIds から除去する。
+      _cleanupPreferredRoleIds() {
+        const validIds = new Set(this.availableRoles.map(r => r.id));
+        const filtered = (this.settings.preferredRoleIds || [])
+          .filter(id => validIds.has(id));
+        if (filtered.length !== (this.settings.preferredRoleIds || []).length) {
+          this.settings.preferredRoleIds = filtered;
+          this.saveToStorage();
+        }
+      },
+
+      // maxAgents スライダー変更時に、選択中の候補 AI 数と整合を取る。
+      // スライダーを減らして選択数を下回ったら、選択リストを末尾からトランケートする。
+      onMaxAgentsChange() {
+        const list = this.settings.preferredRoleIds || [];
+        if (list.length > this.settings.maxAgents) {
+          this.settings.preferredRoleIds = list.slice(0, this.settings.maxAgents);
+        }
+        this.saveToStorage();
+      },
+
+      /**
+       * 履歴セッションを各ステップに復元する。
+       *
+       * ``/api/sessions/{id}/restore`` から取得したデータで
+       * targetPath / settings.focus / scanResult / partLeaders /
+       * chatItems / result を hydrate し、maxStepReached=5 にする。
+       *
+       * @param {string} sessionId
+       */
+      async loadFromSession(sessionId) {
+        try {
+          const res = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + '/restore');
+          if (!res.ok) {
+            toast('セッション復元データの取得に失敗しました (' + res.status + ')', 'error');
+            return;
+          }
+          const data = await res.json();
+          const rc = data.review_context || {};
+
+          // Step 1: 対象パス / focus 復元
+          if (rc.target_path) this.targetPath = rc.target_path;
+          if (rc.focus) this.settings.focus = rc.focus;
+
+          // Step 2: スキャン結果 / パートリーダー
+          if (rc.scan_result) this.scanResult = rc.scan_result;
+          if (Array.isArray(rc.part_leaders)) this.partLeaders = rc.part_leaders;
+
+          // Step 3: 調査 findings / 相互QA
+          const findingsMap = rc.findings_by_aspect || {};
+          const flatFindings = [];
+          let fid = 1;
+          Object.keys(findingsMap).forEach((aspect) => {
+            const list = findingsMap[aspect] || [];
+            list.forEach((f) => {
+              flatFindings.push({ id: 'f_' + fid++, aspect, ...f });
+            });
+          });
+          this.findings = flatFindings;
+          this.findingsCounts = this._recountFindings(flatFindings);
+          this.crossQuestions = (rc.cross_qa || []).map((q, i) => ({
+            id: 'q_' + (i + 1),
+            questioner: q.questioner,
+            target: q.target,
+            question: q.question,
+            answer: q.answer,
+          }));
+          this.investigationComplete = true;
+
+          // Step 4: 会議チャット
+          const chat = Array.isArray(data.chat) ? data.chat : [];
+          this.chatItems = chat;
+          // meetingAgents を part_leaders から再構築
+          this.meetingAgents = (rc.part_leaders || []).map((p) => ({
+            role_id: p.role_id || p.aspect || '',
+            emoji: p.emoji || '🎭',
+            name: p.role_name || p.name || p.role_id || '',
+            aspect: p.aspect || '',
+          }));
+
+          // Step 5: 結果
+          const result = data.result || {};
+          this.result = {
+            session_id: data.session_id,
+            files: {
+              report: result.report,
+              conversation: result.conversation,
+              evaluation: result.evaluation,
+              summary: result.summary,
+              vibe_prompt: result.vibe_prompt,
+            },
+            chain: [data.session_id],
+            hypotheses: null,
+            statistics: result.statistics || {},
+          };
+          this.resultReady = true;
+          this.activeTab = 'report';
+
+          // 全ステップ到達済み → 結果ステップから開始
+          this.maxStepReached = 4;
+          this.step = 4;
+
+          toast('セッションを復元しました。各ステップに戻って修正できます', 'success');
+        } catch (e) {
+          console.error('loadFromSession error:', e);
+          toast('セッション復元に失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      /**
+       * findings 配列から severity 件数を再集計する (復元用)。
+       *
+       * @param {Array} findings
+       * @returns {object} {critical, major, minor, suggestion}
+       */
+      _recountFindings(findings) {
+        const c = { critical: 0, major: 0, minor: 0, suggestion: 0 };
+        for (const f of findings) {
+          const sev = (f.severity || 'minor').toLowerCase();
+          if (sev === 'critical') c.critical++;
+          else if (sev === 'major') c.major++;
+          else if (sev === 'info' || sev === 'suggestion') c.suggestion++;
+          else c.minor++;
+        }
+        return c;
+      },
+
+      /** step を進めると同時に maxStepReached も更新する。 */
+      advanceStep(n) {
+        this.step = n;
+        if (n > this.maxStepReached) this.maxStepReached = n;
+      },
+
+      /** step_indicator クリックによる遷移。到達済み step のみ。データは保持。 */
+      goToStep(n) {
+        if (n < 1 || n > this.maxStepReached) return;
+        this.step = n;
+      },
+
+      /** Step 4 → 5 の手動遷移 (「結果を見る」ボタン)。 */
+      goToResults() {
+        if (!this.result) {
+          toast('結果がまだロードされていません', 'warning');
+          return;
+        }
+        this.advanceStep(4);
+      },
+
+      /** Step 4 → 3 の戻る (会議チャットに戻る、chatItems 保持)。 */
+      backToMeeting() {
+        this.step = 3;
+      },
+
+      // ================================================================
+      // Persistence
+      // ================================================================
+
+      saveToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY_PATH, this.targetPath);
+          localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
+        } catch (e) {
+          console.warn('localStorage save failed:', e);
+        }
+      },
+
+      restoreFromStorage() {
+        try {
+          const savedPath = localStorage.getItem(STORAGE_KEY_PATH);
+          if (savedPath) this.targetPath = savedPath;
+
+          const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+          if (savedSettings) {
+            const parsed = JSON.parse(savedSettings);
+            this.settings = { ...DEFAULT_SETTINGS, ...parsed };
+          }
+        } catch (e) {
+          console.warn('localStorage restore failed:', e);
+        }
+      },
+
+      // ================================================================
+      // Validation
+      // ================================================================
+
+      validatePath() {
+        const p = this.targetPath.trim();
+        if (!p) {
+          this.pathError = '';   // 空はエラー表示せず、submit で弾く
+          return;
+        }
+        // パストラバーサル警告 (UX 向上のため事前チェック、サーバー側でも検証)
+        const parts = p.replace(/\\/g, '/').split('/');
+        if (parts.includes('..')) {
+          this.pathError = 'パストラバーサル (..) は使用できません';
+        } else {
+          this.pathError = '';
+        }
+      },
+
+      // ================================================================
+      // フォルダピッカー (UI モーダル)
+      // ================================================================
+
+      openFolderPicker() {
+        this.folderPicker.open = true;
+        this.folderPicker.error = '';
+        // 現在の targetPath があればそこから開く、なければ候補一覧
+        const startPath = this.targetPath.trim();
+        if (startPath) {
+          this.browseFolder(startPath);
+        } else {
+          this.browseFolder('');
+        }
+      },
+
+      closeFolderPicker() {
+        this.folderPicker.open = false;
+        this.folderPicker.error = '';
+      },
+
+      async browseFolder(path) {
+        this.folderPicker.loading = true;
+        this.folderPicker.error = '';
+        try {
+          const url = path
+            ? '/api/review/browse?path=' + encodeURIComponent(path)
+            : '/api/review/browse';
+          const res = await fetch(url);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            this.folderPicker.error =
+              err.detail || err.message || ('HTTP ' + res.status);
+            return;
+          }
+          const data = await res.json();
+          this.folderPicker.currentPath = data.current_path || '';
+          this.folderPicker.parentPath = data.parent_path || null;
+          this.folderPicker.entries = data.entries || [];
+          this.folderPicker.quickPaths = data.quick_paths || [];
+        } catch (e) {
+          console.error(e);
+          this.folderPicker.error = 'フォルダの読み込みに失敗しました: ' + e.message;
+        } finally {
+          this.folderPicker.loading = false;
+        }
+      },
+
+      browseParent() {
+        if (this.folderPicker.parentPath) {
+          this.browseFolder(this.folderPicker.parentPath);
+        }
+      },
+
+      selectCurrentFolder() {
+        const p = this.folderPicker.currentPath;
+        if (!p) return;
+        this.targetPath = p;
+        this.saveToStorage();
+        this.validatePath();
+        this.closeFolderPicker();
+      },
+
+      // ================================================================
+      // API
+      // ================================================================
+
+      async loadHealth() {
+        try {
+          const res = await fetch('/api/health');
+          if (!res.ok) return;
+          const data = await res.json();
+          if (typeof data.rate_limit_remaining === 'number') {
+            this.remainingQuota = data.rate_limit_remaining;
+          }
+        } catch (e) {
+          console.warn('Failed to load health:', e);
+        }
+      },
+
+      async submitScan() {
+        this.validatePath();
+        if (!this.isPathValid) return;
+
+        this.scanLoading = true;
+        try {
+          const ignorePatterns = this.settings.ignorePatterns
+            .split(',').map((s) => s.trim()).filter(Boolean);
+
+          const res = await fetch('/api/review/plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              target_path: this.targetPath,
+              planner_model: this.settings.plannerModel,
+              conductor_model: this.settings.conductorModel,
+              synth_model: this.settings.synthModel,
+              time_limit: this.settings.timeLimit,
+              max_agents: this.settings.maxAgents,
+              focus: this.settings.focus,
+              ignore_patterns: ignorePatterns,
+            }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const msg = err.detail || err.message || ('HTTP ' + res.status);
+            toast('スキャンに失敗しました: ' + msg, 'error');
+            return;
+          }
+
+          const data = await res.json();
+          this.scanResult = data.scan_result;
+          this.partLeaders = data.part_leaders;
+          this.estimatedRequests = data.estimated_requests || 60;
+          if (typeof data.remaining_quota === 'number') {
+            this.remainingQuota = data.remaining_quota;
+          }
+
+          toast('スキャンが完了しました', 'success');
+          // スキャン結果は Step 1 内に並べて表示するので step は進めない。
+          // ※ maxStepReached は Step 1 のまま (=1)。「調査を開始」で Step 2 に進む。
+        } catch (e) {
+          console.error(e);
+          toast('スキャンに失敗しました: ' + e.message, 'error');
+        } finally {
+          this.scanLoading = false;
+        }
+      },
+
+      // ================================================================
+      // Step 2: 個別調査 + 相互質問 (SSE)
+      // ================================================================
+
+      /**
+       * 調査を開始する。
+       *
+       * OrchestraSSE で /api/review/stream に接続し、Phase 2-5 の全イベントを購読して
+       * investigationProgress / findings / crossQuestions を更新する。
+       */
+      async startInvestigation() {
+        if (!this.scanResult) return;
+
+        // Step 2 の state リセット
+        this.investigationProgress = (this.partLeaders || []).map((l) => ({
+          aspect: l.aspect,
+          aspect_label: l.aspect_label || l.aspect,
+          emoji: l.emoji || '🎭',
+          progress: 0,
+          findings_count: 0,
+        }));
+        this.findings = [];
+        this.crossQuestions = [];
+        this.findingsCounts = { critical: 0, major: 0, minor: 0, suggestion: 0 };
+
+        this.advanceStep(2);
+        this.investigationLoading = true;
+
+        this.sse = new OrchestraSSE('/api/review/stream');
+        this._registerReviewSSEHandlers();
+
+        try {
+          const ignorePatterns = this.settings.ignorePatterns
+            .split(',').map((s) => s.trim()).filter(Boolean);
+          await this.sse.start({
+            scan_result: this.scanResult,
+            part_leaders: this.partLeaders,
+            target_path: this.targetPath,
+            conductor_model: this.settings.conductorModel,
+            synth_model: this.settings.synthModel,
+            time_limit: this.settings.timeLimit,
+            focus: this.settings.focus,
+            ignore_patterns: ignorePatterns,
+          });
+        } catch (e) {
+          console.error('Review SSE start error:', e);
+          toast('調査の開始に失敗しました: ' + e.message, 'error');
+        } finally {
+          this.investigationLoading = false;
+        }
+      },
+
+      /** SSE ハンドラを一括登録する。 */
+      _registerReviewSSEHandlers() {
+        const sse = this.sse;
+        if (!sse) return;
+
+        // ── Phase 1: スキャン (通常は Step 2 で完了しているが再通知される場合あり) ──
+        sse.on('scan_start', () => { /* no-op */ });
+        sse.on('scan_complete', (data) => {
+          if (data.scan_result) this.scanResult = data.scan_result;
+        });
+
+        // ── Phase 2: 個別調査 ──
+        sse.on('investigation_start', (data) => {
+          this.updateInvestigationProgress(data.aspect, 0);
+        });
+        sse.on('investigation_progress', (data) => {
+          this.updateInvestigationProgress(data.aspect, data.progress);
+        });
+        sse.on('investigation_finding', (data) => {
+          const f = data.finding || {};
+          this.findings.push({
+            id: 'f_' + this.findings.length + '_' + Date.now(),
+            aspect: data.aspect,
+            severity: f.severity || 'suggestion',
+            title: f.title || '',
+            description: f.description || '',
+            file_path: f.file_path || '',
+            line_range: f.line_range || null,
+            suggestion: f.suggestion || '',
+          });
+          this.updateFindingsCounts();
+          this._incrementAspectFindings(data.aspect);
+        });
+        sse.on('investigation_complete', (data) => {
+          this.updateInvestigationProgress(data.aspect, 100, data.findings_count);
+        });
+
+        // ── Phase 3: 相互質問 ──
+        sse.on('cross_question_start', () => { /* no-op */ });
+        sse.on('cross_question', (data) => {
+          this.crossQuestions.push({
+            id: 'q_' + this.crossQuestions.length + '_' + Date.now(),
+            questioner: data.questioner,
+            target: data.target,
+            questioner_emoji: this.getAspectEmoji(data.questioner),
+            questioner_name: this.getAspectLabel(data.questioner),
+            target_emoji: this.getAspectEmoji(data.target),
+            target_name: this.getAspectLabel(data.target),
+            question: data.question || '',
+            answer: null,
+          });
+        });
+        sse.on('cross_answer', (data) => {
+          const q = this.crossQuestions.find(
+            (q) => q.questioner === data.questioner
+                && q.target === data.answerer
+                && !q.answer
+          );
+          if (q) q.answer = data.answer || '';
+        });
+        sse.on('cross_question_complete', () => { /* no-op */ });
+
+        // ── Phase 4: 全体会議 ──
+        sse.on('meeting_start', () => {
+          // 参加パートリーダーを role_id で重複除去
+          const seen = new Set();
+          this.meetingAgents = [];
+          for (const l of this.partLeaders) {
+            if (seen.has(l.role_id)) continue;
+            seen.add(l.role_id);
+            this.meetingAgents.push({
+              role_id: l.role_id,
+              emoji: l.emoji || '🎭',
+              name: l.role_name || l.aspect_label || l.role_id,
+              specialty: l.aspect_label || '',
+            });
+          }
+          this.resetAgentStatuses();
+
+          // タイマー初期化 (バックグラウンドで会議進行)
+          this.chatItems = [];
+          this.utterances = [];
+          this.stats = { utteranceCount: 0, totalTokens: 0, convergence: 0 };
+          this.currentRound = 0;
+          this.currentPhase = '';
+          this.currentPattern = '';
+          this.timeLimit = this.settings.timeLimit;
+          this.remainingSec = this.settings.timeLimit;
+          this.timePressure = 'relaxed';
+          this.isAtBottom = true;
+          this.startTimer();
+
+          // ☆ 自動遷移しない。investigationComplete フラグを立てて
+          // Step 3 の下部バーに 「会議に進む →」 ボタンを表示
+          this.investigationComplete = true;
+        });
+
+        sse.on('round_start', (data) => {
+          this.currentRound = data.round;
+          const cfg = data.config || {};
+          this.currentPhase = cfg.phase || '';
+          this.currentPattern = cfg.pattern || '';
+          this.resetAgentStatuses();
+          this.addChatItem({
+            id: 'divider_' + data.round + '_' + Date.now(),
+            type: 'round_divider',
+            round: {
+              number: data.round,
+              topic: cfg.topic || cfg.goal || '',
+              pattern: cfg.pattern || '',
+            },
+          });
+          const firstSpeaker = (cfg.speakers && cfg.speakers[0]) || null;
+          if (firstSpeaker) this._showThinking(firstSpeaker);
+        });
+
+        sse.on('utterance', (data) => {
+          this.isAgentThinking = false;
+          this.thinkingAgent = null;
+          this.utterances.push(data);
+          this.stats.utteranceCount++;
+          this.stats.totalTokens += Number(data.tokens || 0);
+          this.addChatItem({
+            id: 'utt_' + this.utterances.length + '_' + Date.now(),
+            type: 'utterance',
+            utterance: data,
+          });
+          const roleId = data.agent?.role_id;
+          if (roleId) this.updateAgentStatus(roleId, 'done');
+        });
+
+        sse.on('round_conclusion', (data) => {
+          this.isAgentThinking = false;
+          this.addChatItem({
+            id: 'conclusion_' + data.round + '_' + Date.now(),
+            type: 'conclusion',
+            conclusion: data,
+          });
+        });
+
+        sse.on('round_end', (data) => {
+          if (typeof data.convergence === 'number') {
+            this.stats.convergence = data.convergence;
+          }
+          this.resetAgentStatuses();
+        });
+
+        sse.on('convergence_check', (data) => {
+          if (typeof data.score === 'number') {
+            this.stats.convergence = data.score;
+          }
+        });
+
+        sse.on('stagnation_detected', () => {
+          this.addChatItem({
+            id: 'sys_stag_' + Date.now(),
+            type: 'system_event',
+            event: { icon: 'bolt', message: '議論の方向転換を指示しました' },
+          });
+        });
+
+        sse.on('time_pressure', (data) => {
+          if (typeof data.remaining_sec === 'number') {
+            this.remainingSec = data.remaining_sec;
+          }
+          if (data.pressure) {
+            this.timePressure = data.pressure;
+          }
+          if (data.pressure === 'critical') {
+            this.addChatItem({
+              id: 'sys_time_' + Date.now(),
+              type: 'system_event',
+              event: { icon: 'clock', message: '残り時間わずか — 議論を収束します' },
+            });
+          }
+        });
+
+        sse.on('progress', (data) => {
+          if (typeof data.remaining_sec === 'number') {
+            this.remainingSec = data.remaining_sec;
+            this.updateTimePressure();
+          }
+          if (typeof data.total_rounds === 'number' && data.total_rounds > 0) {
+            this.totalRounds = data.total_rounds;
+          }
+        });
+
+        // ── Phase 5: 完了 ──
+        sse.on('done', (data) => {
+          this.stopTimer();
+          this.isAgentThinking = false;
+          this.handleDone(data);
+        });
+        sse.on('error', (data) => {
+          this.stopTimer();
+          this.isAgentThinking = false;
+          this.investigationLoading = false;
+          toast(data.message || 'エラーが発生しました', 'error');
+          if (data.recoverable === false) {
+            setTimeout(() => { this.step = 1; }, 3000);
+          }
+        });
+      },
+
+      // ================================================================
+      // Chat: スクロール / アイテム追加
+      // ================================================================
+
+      addChatItem(item) {
+        this.chatItems.push(item);
+        if (this.isAtBottom) {
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      scrollToBottom() {
+        const el = this.$refs.chatContainer;
+        if (!el) return;
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+        this.isAtBottom = true;
+      },
+
+      handleScroll() {
+        const el = this.$refs.chatContainer;
+        if (!el) return;
+        const threshold = 60;
+        this.isAtBottom =
+          (el.scrollHeight - el.scrollTop - el.clientHeight) < threshold;
+      },
+
+      _showThinking(roleId) {
+        const agent = this.meetingAgents.find((a) => a.role_id === roleId);
+        if (agent) {
+          this.thinkingAgent = agent;
+          this.isAgentThinking = true;
+          this.updateAgentStatus(roleId, 'speaking');
+        }
+      },
+
+      // ================================================================
+      // Timer
+      // ================================================================
+
+      startTimer() {
+        this.stopTimer();
+        this.timerInterval = setInterval(() => {
+          if (this.remainingSec > 0) {
+            this.remainingSec--;
+            this.updateTimePressure();
+          }
+        }, 1000);
+      },
+
+      stopTimer() {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+      },
+
+      updateTimePressure() {
+        const ratio = this.remainingSec / Math.max(1, this.timeLimit);
+        if (ratio > 0.6) this.timePressure = 'relaxed';
+        else if (ratio > 0.3) this.timePressure = 'moderate';
+        else if (ratio > 0.1) this.timePressure = 'urgent';
+        else this.timePressure = 'critical';
+      },
+
+      // ================================================================
+      // Agent status
+      // ================================================================
+
+      getAgentStatus(roleId) {
+        return this.agentStatuses[roleId] || 'waiting';
+      },
+
+      updateAgentStatus(roleId, status) {
+        this.agentStatuses = { ...this.agentStatuses, [roleId]: status };
+      },
+
+      resetAgentStatuses() {
+        const reset = {};
+        for (const a of this.meetingAgents) {
+          reset[a.role_id] = 'waiting';
+        }
+        this.agentStatuses = reset;
+      },
+
+      // ================================================================
+      // Abort
+      // ================================================================
+
+      confirmAbort() {
+        window.dispatchEvent(new CustomEvent('open-modal', {
+          detail: {
+            title: 'レビューを中断しますか?',
+            message: 'これまでの調査結果は保存されず、Step 1 に戻ります。',
+            action: () => this.doAbort(),
+            confirmLabel: '中断する',
+          },
+        }));
+      },
+
+      doAbort() {
+        if (this.sse) {
+          try { this.sse.abort(); } catch (e) { console.warn(e); }
+          this.sse = null;
+        }
+        this.stopTimer();
+        this.isAgentThinking = false;
+        toast('レビューを中断しました', 'info');
+        this.step = 1;
+      },
+
+      /**
+       * ``investigationProgress`` 内の該当 aspect を更新する。
+       * 存在しなければ push する。
+       */
+      updateInvestigationProgress(aspect, progress, findingsCount) {
+        const existing = this.investigationProgress.find((p) => p.aspect === aspect);
+        if (existing) {
+          existing.progress = progress;
+          if (typeof findingsCount === 'number') {
+            existing.findings_count = findingsCount;
+          }
+        } else {
+          this.investigationProgress.push({
+            aspect: aspect,
+            aspect_label: this.getAspectLabel(aspect),
+            emoji: this.getAspectEmoji(aspect),
+            progress: progress,
+            findings_count: findingsCount || 0,
+          });
+        }
+      },
+
+      /** aspect 単位の findings_count をインクリメントする。 */
+      _incrementAspectFindings(aspect) {
+        const p = this.investigationProgress.find((p) => p.aspect === aspect);
+        if (p) p.findings_count = (p.findings_count || 0) + 1;
+      },
+
+      /** ``findings`` から severity 別カウントを再計算する。 */
+      updateFindingsCounts() {
+        const counts = { critical: 0, major: 0, minor: 0, suggestion: 0 };
+        for (const f of this.findings) {
+          const s = f.severity || 'suggestion';
+          if (counts[s] != null) counts[s]++;
+        }
+        this.findingsCounts = counts;
+      },
+
+      /** aspect ID → 絵文字。 */
+      getAspectEmoji(aspect) {
+        const a = this.reviewAspects.find((x) => x.aspect === aspect);
+        return a ? a.emoji : '🎭';
+      },
+
+      /** aspect ID → ラベル。 */
+      getAspectLabel(aspect) {
+        const a = this.reviewAspects.find((x) => x.aspect === aspect);
+        return a ? a.label : aspect;
+      },
+
+      /** severity → 発見事項カードの Tailwind クラス。 */
+      severityClasses(severity) {
+        const map = {
+          critical:   'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10',
+          major:      'border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/10',
+          minor:      'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/10',
+          suggestion: 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/10',
+        };
+        return map[severity] || map.suggestion;
+      },
+
+      /** severity → 深刻度バッジの Tailwind クラス。 */
+      severityBadgeClasses(severity) {
+        const map = {
+          critical:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+          major:      'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+          minor:      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+          suggestion: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+        };
+        return map[severity] || map.suggestion;
+      },
+
+      /**
+       * done イベントを処理する。
+       * ``/api/sessions/{id}/content`` から Markdown ファイル群を取得し、
+       * Step 5 に遷移する。
+       */
+      async handleDone(data) {
+        this.stopTimer();
+        this.isAgentThinking = false;
+        this.investigationLoading = false;
+
+        if (!data.session_id) {
+          toast('レビュー完了しましたが結果を取得できませんでした', 'warning');
+          return;
+        }
+
+        // Step 5 用の統計 (共通処理)
+        const stats = {
+          ...(data.statistics || {}),
+          files_reviewed: data.statistics?.files_reviewed
+            ?? this.scanResult?.total_files ?? 0,
+          total_findings: data.statistics?.total_findings
+            ?? this.findings.length,
+        };
+
+        // done イベントに files が直接同梱されていればそれを使う (mock 対応)
+        if (data.files && typeof data.files === 'object'
+            && Object.keys(data.files).length > 0) {
+          this.result = {
+            session_id: data.session_id,
+            files: data.files,
+            chain: data.chain || [],
+            hypotheses: data.hypotheses,
+            statistics: stats,
+          };
+          this.activeTab = 'report';
+          this.copied = false;
+          this.resultReady = true;
+          toast('レビューが完了しました。「結果を見る」ボタンで次へ進んでください', 'success');
+          return;
+        }
+
+        // 通常フロー: /api/sessions/{id}/content から取得
+        try {
+          const res = await fetch(
+            '/api/sessions/' + encodeURIComponent(data.session_id) + '/content'
+          );
+          if (!res.ok) {
+            toast('結果ファイルの読み込みに失敗しました (HTTP ' + res.status + ')', 'error');
+            return;
+          }
+          const content = await res.json();
+          this.result = {
+            session_id: data.session_id,
+            files: content.files || {},
+            chain: content.chain || [],
+            hypotheses: content.hypotheses,
+            statistics: stats,
+          };
+          this.activeTab = 'report';
+          this.copied = false;
+          this.resultReady = true;
+          toast('レビューが完了しました。「結果を見る」ボタンで次へ進んでください', 'success');
+        } catch (e) {
+          console.error(e);
+          toast('結果の読み込みに失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      /**
+       * 修正指示書 (vibe_prompt) をクリップボードにコピーする。
+       */
+      async copyVibePrompt() {
+        const text = this.result?.files?.vibe_prompt;
+        if (!text) {
+          toast('修正指示書がありません', 'warning');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          this.copied = true;
+          toast('修正指示書をコピーしました', 'success');
+          setTimeout(() => { this.copied = false; }, 3000);
+        } catch (e) {
+          console.error(e);
+          toast('コピーに失敗しました: ' + e.message, 'error');
+        }
+      },
+
+      /**
+       * セッションファイルをダウンロードする。
+       *
+       * @param {string} fileType - 'report' | 'vibe_prompt' | 'conversation'
+       *                            | 'evaluation' | 'summary' | 'all'
+       */
+      downloadFile(fileType) {
+        if (!this.result?.session_id) return;
+        const url = '/api/sessions/'
+          + encodeURIComponent(this.result.session_id)
+          + '/download?file=' + encodeURIComponent(fileType);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      },
+    };
+  }
+</script>
+{% endblock %}

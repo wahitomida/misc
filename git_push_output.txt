@@ -1,0 +1,18 @@
+git version 2.55.0.windows.3
+warning: in the working copy of 'git_status2.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'git_push_output.txt', LF will be replaced by CRLF the next time Git touches it
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'hiita@hitomisPC.(none)')
+error: src refspec main does not match any
+error: failed to push some refs to 'https://github.com/wahitomida/misc.git'

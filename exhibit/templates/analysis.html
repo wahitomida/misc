@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}分析ダッシュボード - ExhibiReport{% endblock %}
+{% block content %}
+<div x-data="analysisDashboard()" class="max-w-[1440px] mx-auto px-6 py-8 animate-fade-in">
+    <h2 class="text-xl font-semibold mb-6">分析ダッシュボード</h2>
+
+    <!-- Analysis Selection -->
+    <div x-show="!analysisExecuted" class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6 mb-6">
+        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">実行する分析を選択</h3>
+        <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(1) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="1" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">📊 関連度比較</span><p class="text-xs text-slate-500">横棒グラフ</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(2) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="2" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">🍩 業種・カテゴリ分布</span><p class="text-xs text-slate-500">ドーナツチャート</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(3) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="3" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">📋 テーマ×企業マトリクス</span><p class="text-xs text-slate-500">テーブル</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(4) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="4" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">☁️ 技術トレンドワードクラウド</span><p class="text-xs text-slate-500">D3.js</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(5) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="5" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">🫧 企業規模×技術成熟度</span><p class="text-xs text-slate-500">バブルチャート</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(6) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="6" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">🕸️ 企業間マップ</span><p class="text-xs text-slate-500">ネットワーク図</p></div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 cursor-pointer hover:border-primary/30 transition-colors" :class="selectedAnalyses.includes(7) && 'border-primary/50 bg-primary/5'">
+                <input type="checkbox" value="7" x-model.number="selectedAnalyses" class="rounded border-slate-300">
+                <div><span class="text-sm font-medium">🔌 API/SDK公開レベル比較</span><p class="text-xs text-slate-500">テーブル</p></div>
+            </label>
+        </div>
+        <button @click="executeAnalysis()" :disabled="selectedAnalyses.length === 0 || analyzing" class="mt-6 px-6 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50">
+            <span x-show="!analyzing">📊 選択した分析を実行 (<span x-text="selectedAnalyses.length"></span>件)</span>
+            <span x-show="analyzing" class="flex items-center gap-2"><svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>分析中...</span>
+        </button>
+    </div>
+
+    <!-- Analysis Results -->
+    <div x-show="analysisExecuted" class="space-y-6">
+        <template x-for="result in analysisResults" :key="result.type">
+            <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold" x-text="getAnalysisTitle(result.type)"></h3>
+                    <button @click="copyAnalysis(result)" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-xs">📋</button>
+                </div>
+                <div :id="'chart-' + result.type" class="min-h-[300px]" x-init="$nextTick(() => renderChart(result))"></div>
+            </div>
+        </template>
+
+        <!-- Footer -->
+        <div class="flex items-center gap-3 py-4 border-t border-slate-200 dark:border-slate-700">
+            <button @click="copyAllAnalysis()" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">📋 全コピー</button>
+            <button @click="analysisExecuted = false" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium rounded-xl transition-colors">← 分析を変更</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function analysisDashboard() {
+    return {
+        reportData: null,
+        selectedAnalyses: [1, 2, 3],
+        analyzing: false,
+        analysisExecuted: false,
+        analysisResults: [],
+
+        init() {
+            const stored = sessionStorage.getItem('analysisData');
+            if (stored) {
+                this.reportData = JSON.parse(stored);
+            }
+        },
+
+        async executeAnalysis() {
+            if (!this.reportData || this.selectedAnalyses.length === 0) {
+                showToast('分析するデータがありません', 'error');
+                return;
+            }
+            this.analyzing = true;
+            try {
+                const res = await fetch('/api/analysis/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        report_data: this.reportData,
+                        analyses: this.selectedAnalyses.sort(),
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.analysisResults = data.analyses.filter(a => a.data);
+                    this.analysisExecuted = true;
+                }
+            } catch (e) { showToast('分析に失敗しました', 'error'); }
+            this.analyzing = false;
+        },
+
+        getAnalysisTitle(type) {
+            const titles = { 1: '📊 関連度比較', 2: '🍩 業種・カテゴリ分布', 3: '📋 テーマ×企業マトリクス', 4: '☁️ 技術トレンドワードクラウド', 5: '🫧 企業規模×技術成熟度', 6: '🕸️ 企業間マップ', 7: '🔌 API/SDK公開レベル比較' };
+            return titles[type] || '分析';
+        },
+
+        renderChart(result) {
+            const container = document.getElementById('chart-' + result.type);
+            if (!container || !result.data) return;
+            renderAnalysisChart(container, result.type, result.data);
+        },
+
+        copyAnalysis(result) {
+            navigator.clipboard.writeText(JSON.stringify(result.data, null, 2));
+            showToast('コピーしました', 'success');
+        },
+
+        copyAllAnalysis() {
+            const text = this.analysisResults.map(r => `${this.getAnalysisTitle(r.type)}\n${JSON.stringify(r.data, null, 2)}`).join('\n\n---\n\n');
+            navigator.clipboard.writeText(text);
+            showToast('全分析をコピーしました', 'success');
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}AI Orchestra — Home{% endblock %}
+
+{% block content %}
+{% import "components/icon.html" as ui %}
+<div class="relative isolate min-h-[calc(100vh-8rem)]">
+
+  {# ============================================================
+     背景演出レイヤー (Home 限定、グラデーションのみ)
+     - 浮遊グラデーションブロブ 3 個
+     - isolate で stacking context を作り、blob (z=0) を content (z=10) の下に配置
+     ============================================================ #}
+  <div class="pointer-events-none absolute inset-0 overflow-hidden"
+       aria-hidden="true">
+    {# Blob A: 左上 (cyan/sky) #}
+    <div class="absolute -top-16 -left-16 w-[480px] h-[480px] rounded-full
+                bg-gradient-to-br from-cyan-400 to-sky-500
+                opacity-40 dark:opacity-[0.10]
+                blur-3xl animate-float-slow"></div>
+    {# Blob B: 右下 (sky/blue) #}
+    <div class="absolute top-[40%] -right-16 w-[560px] h-[560px] rounded-full
+                bg-gradient-to-tr from-sky-400 to-blue-500
+                opacity-40 dark:opacity-[0.10]
+                blur-3xl animate-float-slow-reverse"></div>
+    {# Blob C: 中央下 (teal/cyan) #}
+    <div class="absolute bottom-0 left-[35%] w-[440px] h-[440px] rounded-full
+                bg-gradient-to-br from-teal-400 to-cyan-400
+                opacity-30 dark:opacity-[0.08]
+                blur-3xl animate-float-slow"
+         style="animation-delay: -8s"></div>
+  </div>
+
+  {# ============================================================
+     Hero Section
+     ============================================================ #}
+  <section class="relative z-10 text-center pt-16 pb-14">
+
+    {# --- ピルバッジ (小さな緑パルスドット + テキスト) --- #}
+    <div class="inline-flex items-center gap-2 mb-6
+                px-3 py-1 rounded-full
+                bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm
+                border border-slate-200/60 dark:border-slate-700/60
+                text-xs font-medium text-slate-600 dark:text-slate-300
+                animate-slide-down">
+      <span class="relative flex h-2 w-2">
+        <span class="absolute inline-flex h-full w-full rounded-full
+                     bg-teal-400 opacity-75 animate-ping"></span>
+        <span class="relative inline-flex h-2 w-2 rounded-full bg-teal-500"></span>
+      </span>
+      <span>AI-powered multi-agent discussion</span>
+    </div>
+
+    {# --- メインタイトル --- #}
+    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight
+               animate-slide-up stagger-1">
+      <span class="text-slate-900 dark:text-white">AI</span>
+      <span class="bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-600
+                   bg-clip-text text-transparent"> Orchestra</span>
+    </h1>
+
+    {# --- サブテキスト --- #}
+    <p class="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-400
+              max-w-2xl mx-auto leading-relaxed
+              animate-slide-up stagger-2">
+      複数のAI専門家が、あなたのアイデアを磨く。<br class="hidden sm:block">
+      議論・コードレビューをまるで会議室のように。
+    </p>
+  </section>
+
+  {# ============================================================
+     モード選択カード (ガラスモーフィズム + ホバー演出)
+     ============================================================ #}
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-16">
+
+    {# ---- Idea Discussion ---- #}
+    <a href="/idea"
+       class="group relative block p-8 rounded-2xl overflow-hidden
+              bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm
+              border border-slate-200/60 dark:border-slate-700/60
+              transition-all duration-300 ease-out
+              hover:-translate-y-1
+              hover:border-sky-300/60 dark:hover:border-sky-500/60
+              hover:shadow-lg hover:shadow-sky-500/10
+              focus-ring
+              animate-slide-up stagger-3">
+
+      {# ホバー時グラデーションオーバーレイ #}
+      <div class="pointer-events-none absolute inset-0
+                  bg-gradient-to-br from-sky-50/0 via-sky-50/0 to-cyan-50/0
+                  group-hover:from-sky-50 group-hover:to-cyan-50
+                  dark:group-hover:from-sky-900/20 dark:group-hover:to-cyan-900/20
+                  opacity-0 group-hover:opacity-100
+                  transition-opacity duration-500"
+           aria-hidden="true"></div>
+
+      <div class="relative">
+        {# アイコン (電球 SVG) #}
+        <div class="w-12 h-12 mb-5 rounded-lg
+                    bg-sky-100 dark:bg-sky-900/40
+                    flex items-center justify-center
+                    transition-transform duration-300 group-hover:scale-110">
+          <svg class="w-6 h-6 text-sky-600 dark:text-sky-400" fill="none"
+               stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M12 3c-3.86 0-7 3.14-7 7 0 2.4 1.21 4.52 3.05 5.79
+                     .43.29.7.77.7 1.29V19a1 1 0 001 1h4.5a1 1 0 001-1v-1.92
+                     c0-.52.27-1 .7-1.29A6.99 6.99 0 0019 10c0-3.86-3.14-7-7-7z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M9.75 22.5h4.5"/>
+          </svg>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">
+          Idea Discussion
+        </h2>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+          5〜6人のAI専門家が、あなたのテーマを多角的に議論。<br>
+          洞察・仮説・実験計画を導出します。
+        </p>
+
+        <div class="inline-flex items-center gap-1.5 text-sm font-medium
+                    text-sky-600 dark:text-sky-400">
+          <span>議論を始める</span>
+          <span class="inline-flex transition-transform duration-300 group-hover:translate-x-1">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+        </div>
+      </div>
+    </a>
+
+    {# ---- Code Review ---- #}
+    <a href="/review"
+       class="group relative block p-8 rounded-2xl overflow-hidden
+              bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm
+              border border-slate-200/60 dark:border-slate-700/60
+              transition-all duration-300 ease-out
+              hover:-translate-y-1
+              hover:border-cyan-300/60 dark:hover:border-cyan-500/60
+              hover:shadow-lg hover:shadow-cyan-500/10
+              focus-ring
+              animate-slide-up stagger-4">
+
+      <div class="pointer-events-none absolute inset-0
+                  bg-gradient-to-br from-cyan-50/0 via-cyan-50/0 to-teal-50/0
+                  group-hover:from-cyan-50 group-hover:to-teal-50
+                  dark:group-hover:from-cyan-900/20 dark:group-hover:to-teal-900/20
+                  opacity-0 group-hover:opacity-100
+                  transition-opacity duration-500"
+           aria-hidden="true"></div>
+
+      <div class="relative">
+        {# アイコン (虫眼鏡 SVG) #}
+        <div class="w-12 h-12 mb-5 rounded-lg
+                    bg-cyan-100 dark:bg-cyan-900/40
+                    flex items-center justify-center
+                    transition-transform duration-300 group-hover:scale-110">
+          <svg class="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none"
+               stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/>
+          </svg>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">
+          Code Review
+        </h2>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+          6観点のAIエージェントがコードをレビュー。<br>
+          修正指示書まで自動生成します。
+        </p>
+
+        <div class="inline-flex items-center gap-1.5 text-sm font-medium
+                    text-cyan-600 dark:text-cyan-400">
+          <span>レビューを始める</span>
+          <span class="inline-flex transition-transform duration-300 group-hover:translate-x-1">{{ ui.icon('arrow-right', 'w-4 h-4') }}</span>
+        </div>
+      </div>
+    </a>
+  </section>
+
+</div>
+{% endblock %}
