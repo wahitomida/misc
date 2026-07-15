@@ -1,4 +1,0 @@
-git version 2.55.0.windows.3
-true
-master
-fatal: your current branch 'master' does not have any commits yet

@@ -1,5 +1,0 @@
-
-[optparse.groups]Usage:[/]   
-  C:\Users\hiita\OneDrive\workspace\.venv\Scripts\python.exe -m pip list \[options]
-
-no such option: -c
